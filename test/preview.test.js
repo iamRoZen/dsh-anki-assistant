@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  buildCardsHtml, clozeBack, clozeFront, fieldsToHtml, renderTemplate, splitFields,
+  buildCardsHtml, buildPrintHtml, clozeBack, clozeFront, fieldsToHtml, renderTemplate, splitFields,
 } from '../lib/preview.js'
 
 const scheme = {
@@ -76,4 +76,19 @@ test('默认加载 MathJax，mathjax=false 可关闭', () => {
   const cards = [{ frontHtml: fieldsToHtml(split.front), backHtml: fieldsToHtml(split.back) }]
   assert.match(buildCardsHtml({ cards }), /mathjax@3/)
   assert.doesNotMatch(buildCardsHtml({ cards, mathjax: false }), /mathjax@3/)
+})
+
+test('默认叠加 Anki 基础样式，ankiBase=false 可关闭', () => {
+  const cards = [{ frontHtml: '正面', backHtml: '背面' }]
+  assert.match(buildCardsHtml({ cards }), /\.card img \{ max-width: 100%/)
+  assert.doesNotMatch(buildCardsHtml({ cards, ankiBase: false }), /\.card img \{ max-width: 100%/)
+})
+
+test('打印版：一张卡一页，含 A4 分页与正反面', () => {
+  const cards = [{ frontHtml: '正面一', backHtml: '背面一' }, { frontHtml: '正面二', backHtml: '背面二' }]
+  const html = buildPrintHtml({ cards, title: '打印' })
+  assert.match(html, /@page \{ size: A4/)
+  assert.equal((html.match(/class="sheet"/g) ?? []).length, 2)
+  assert.match(html, /正面一/)
+  assert.match(html, /背面二/)
 })

@@ -20,7 +20,7 @@ import {
 } from './lib/batch.js'
 import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteError } from './lib/write.js'
 import { findLines, readMaterial } from './lib/materials.js'
-import { buildCardsHtml, fieldsToHtml, openFile, renderPng, renderTemplate, splitFields } from './lib/preview.js'
+import { buildCardsHtml, buildPrintHtml, fieldsToHtml, measureOverflow, openFile, renderPdf, renderPng, renderTemplate, splitFields } from './lib/preview.js'
 import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readPackageSchemeRecord, readSchemeBody, readTemplate, refreshSchemeAssets, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
 
@@ -684,6 +684,10 @@ export function apply(ctx, config = {}) {
       notes: { type: 'array', items: { type: 'integer' }, description: '指定 noteId，优先于批次' },
       png: { type: 'boolean', description: '再截一张 PNG（用本机 Edge 无头渲染；没有 Edge 时只出 HTML）' },
       mathjax: { type: 'boolean', description: '加载 MathJax 排版公式（默认开；mathjax=false 关闭）' },
+      ankiBase: { type: 'boolean', description: '叠加近似版 Anki 基础样式（默认开）' },
+      split: { type: 'boolean', description: '逐张另存 PNG，便于单张放大看（每张一次无头渲染，较慢）' },
+      pdf: { type: 'boolean', description: '另出一份 A4 PDF，一张卡一页（正面、背面）' },
+      measure: { type: 'boolean', description: '量横向溢出并回报（png 时默认开启）' },
       open: { type: 'boolean', description: '生成后用默认浏览器打开' },
     },
     output: {
@@ -693,6 +697,7 @@ export function apply(ctx, config = {}) {
         properties: {
           file: { type: 'string' },
           png: { type: 'string' },
+          files: { type: 'array', items: { type: 'string' } },
           cards: { type: 'integer' },
           text: { type: 'string' },
         },
@@ -762,12 +767,26 @@ export function apply(ctx, config = {}) {
         return { frontHtml: fieldsToHtml(split.front), backHtml: fieldsToHtml(split.back) }
       })
 
-      const html = buildCardsHtml({ cards, css, title, mathjax: args.mathjax !== false })
+      const useMath = args.mathjax !== false
+      const useBase = args.ankiBase !== false
+      const html = buildCardsHtml({
+        cards,
+        css,
+        title,
+        mathjax: useMath,
+        ankiBase: useBase,
+        measure: Boolean(args.png) && args.measure !== false,
+      })
       const dir = join(store.root, 'previews')
       await mkdir(dir, { recursive: true })
       const stamp = Date.now().toString(36)
       const file = join(dir, `preview-${stamp}.html`)
       await writeFile(file, html, 'utf8')
+
+      const files = []
+      const edgeOptions = useMath
+        ? { timeoutMs: 60000, virtualTimeBudget: 15000 }
+        : { timeoutMs: 20000, virtualTimeBudget: 0 }
 
       let pngFile = null
       let pngNote = ''
@@ -775,17 +794,66 @@ export function apply(ctx, config = {}) {
         pngFile = await renderPng(file, join(dir, `preview-${stamp}.png`), {
           width: 1100,
           height: Math.min(300 + cards.length * 700, 16000),
-          timeoutMs: args.mathjax === false ? 20000 : 60000,
-          virtualTimeBudget: args.mathjax === false ? 0 : 15000,
+          ...edgeOptions,
         })
+        if (pngFile) files.push(pngFile)
         pngNote = pngFile ? `；PNG：${pngFile}` : '；PNG 未生成（没找到 Edge 或渲染超时）'
       }
+
+      if (args.split) {
+        for (let index = 0; index < cards.length; index += 1) {
+          const singleHtml = join(dir, `preview-${stamp}-${String(index + 1).padStart(2, '0')}.html`)
+          await writeFile(singleHtml, buildCardsHtml({
+            cards: [cards[index]],
+            css,
+            title: `${title} #${index + 1}`,
+            mathjax: useMath,
+            ankiBase: useBase,
+          }), 'utf8')
+          const singlePng = await renderPng(singleHtml, singleHtml.replace(/\.html$/, '.png'), {
+            width: 1100,
+            height: 1400,
+            ...edgeOptions,
+          })
+          if (singlePng) files.push(singlePng)
+        }
+      }
+
+      let pdfFile = null
+      if (args.pdf) {
+        const printHtml = join(dir, `print-${stamp}.html`)
+        await writeFile(printHtml, buildPrintHtml({
+          cards,
+          css,
+          title: `${title}（打印版）`,
+          ankiBase: useBase,
+          mathjax: useMath,
+        }), 'utf8')
+        pdfFile = await renderPdf(printHtml, join(dir, `print-${stamp}.pdf`), edgeOptions)
+        if (pdfFile) files.push(pdfFile)
+      }
+
+      let layoutNote = ''
+      if (args.png && args.measure !== false) {
+        const measured = await measureOverflow(file, edgeOptions)
+        if (measured) {
+          const bad = measured.filter((entry) => entry.bad?.length)
+          layoutNote = bad.length
+            ? `；溢出：${bad.map((entry) => `#${entry.card} ${entry.bad.join('/')}`).join('，')}`
+            : '；无横向溢出'
+        } else {
+          layoutNote = '；溢出检测未返回'
+        }
+      }
+
       if (args.open) openFile(file)
+      const extraNote = files.length > 1 ? `；另存 ${files.length - (pngFile ? 1 : 0)} 个文件` : ''
       return {
         file,
         ...(pngFile ? { png: pngFile } : {}),
+        ...(files.length ? { files } : {}),
         cards: cards.length,
-        text: `已生成 ${cards.length} 张卡的预览：${file}${pngNote}${args.open ? '（已用浏览器打开）' : ''}`,
+        text: `已生成 ${cards.length} 张卡的预览：${file}${pngNote}${layoutNote}${extraNote}${args.open ? '（已用浏览器打开）' : ''}`,
       }
     },
   }))
