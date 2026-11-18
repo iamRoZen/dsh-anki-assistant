@@ -20,7 +20,7 @@ import {
 } from './lib/batch.js'
 import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteError } from './lib/write.js'
 import { findLines, readMaterial } from './lib/materials.js'
-import { buildCardsHtml, openFile, splitFields } from './lib/preview.js'
+import { buildCardsHtml, fieldsToHtml, openFile, renderPng, renderTemplate, splitFields } from './lib/preview.js'
 import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readPackageSchemeRecord, readSchemeBody, readTemplate, refreshSchemeAssets, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
 
@@ -682,6 +682,8 @@ export function apply(ctx, config = {}) {
       batch: { type: 'string', description: '批次 id' },
       plan: { type: 'string', description: '计划 id（缺批次时按其批次预览）' },
       notes: { type: 'array', items: { type: 'integer' }, description: '指定 noteId，优先于批次' },
+      png: { type: 'boolean', description: '再截一张 PNG（用本机 Edge 无头渲染；没有 Edge 时只出 HTML）' },
+      mathjax: { type: 'boolean', description: '加载 MathJax（需要联网；出图时等待公式排版）' },
       open: { type: 'boolean', description: '生成后用默认浏览器打开' },
     },
     output: {
@@ -690,6 +692,7 @@ export function apply(ctx, config = {}) {
         additionalProperties: false,
         properties: {
           file: { type: 'string' },
+          png: { type: 'string' },
           cards: { type: 'integer' },
           text: { type: 'string' },
         },
@@ -733,25 +736,53 @@ export function apply(ctx, config = {}) {
       }
 
       let css = ''
+      let template = null
       if (model) {
         try {
           css = (await anki.modelStyling(model))?.css ?? ''
         } catch {
           css = ''
         }
+        try {
+          const templates = await anki.modelTemplates(model)
+          template = templates ? Object.values(templates)[0] ?? null : null
+        } catch {
+          template = null
+        }
       }
 
-      const cards = fieldsList.map((fields) => splitFields(scheme, fields))
-      const html = buildCardsHtml({ cards, css, title })
+      // 有真实模板就按模板渲染；没有才退回字段角色兜底
+      const cards = fieldsList.map((fields) => {
+        if (template?.Front && template?.Back) {
+          const frontHtml = renderTemplate(template.Front, fields, 'front')
+          const backHtml = renderTemplate(template.Back, fields, 'back', frontHtml)
+          return { frontHtml, backHtml }
+        }
+        const split = splitFields(scheme, fields)
+        return { frontHtml: fieldsToHtml(split.front), backHtml: fieldsToHtml(split.back) }
+      })
+
+      const html = buildCardsHtml({ cards, css, title, mathjax: Boolean(args.mathjax) })
       const dir = join(store.root, 'previews')
       await mkdir(dir, { recursive: true })
-      const file = join(dir, `preview-${Date.now().toString(36)}.html`)
+      const stamp = Date.now().toString(36)
+      const file = join(dir, `preview-${stamp}.html`)
       await writeFile(file, html, 'utf8')
+
+      let pngFile = null
+      let pngNote = ''
+      if (args.png) {
+        pngFile = await renderPng(file, join(dir, `preview-${stamp}.png`), {
+          virtualTimeBudget: args.mathjax ? 8000 : 0,
+        })
+        pngNote = pngFile ? `；PNG：${pngFile}` : '；PNG 未生成（没找到 Edge 或渲染超时）'
+      }
       if (args.open) openFile(file)
       return {
         file,
+        ...(pngFile ? { png: pngFile } : {}),
         cards: cards.length,
-        text: `已生成 ${cards.length} 张卡的预览：${file}${args.open ? '（已用浏览器打开）' : ''}`,
+        text: `已生成 ${cards.length} 张卡的预览：${file}${pngNote}${args.open ? '（已用浏览器打开）' : ''}`,
       }
     },
   }))
@@ -813,7 +844,7 @@ export function apply(ctx, config = {}) {
       return [
         '## 工具与方案约定',
         '可用工具：scheme（方案）、practice（实践）、batch（批次）、materials（资料与行号）、card_write（plan/commit/verify）、card_preview（离线渲染预览）。',
-        '方法是方案的事：动手前 scheme list，选中后 scheme get 会带回正文、卡片模板与用过的实践；方案没写的，不要自己发明统一标准。',
+        '方法是方案的事：动手前 scheme list，选中后 scheme get 会带回正文、卡片模板与用过的实践；方案没写的部分由任务决定。',
         '资料定位用 materials，返回的 p页:L行 可直接写进定位字段。',
         '写入先 card_write plan 给用户看，确认后 commit；commit 可 open=true 在 Anki 里打开，card_preview 可渲染正反面离线预览。',
         '改了草稿、方案版本或目标，旧计划自动作废，需要重新 plan。',

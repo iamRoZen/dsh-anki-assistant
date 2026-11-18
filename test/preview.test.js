@@ -1,7 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildCardsHtml, clozeBack, clozeFront, splitFields } from '../lib/preview.js'
+import {
+  buildCardsHtml, clozeBack, clozeFront, fieldsToHtml, renderTemplate, splitFields,
+} from '../lib/preview.js'
 
 const scheme = {
   output: {
@@ -31,19 +33,29 @@ test('挖空：正面隐藏、背面揭示', () => {
   assert.equal(clozeFront('无挖空'), '无挖空')
 })
 
+test('真实模板：字段替换、FrontSide、条件段、cloze 两面不同', () => {
+  const front = '{{#问题}}<b>{{问题}}</b>{{/问题}}{{cloze:答案}}'
+  const back = '{{FrontSide}}<hr>{{cloze:答案}}{{^笔记}}（无笔记）{{/笔记}}'
+  const f = renderTemplate(front, fields, 'front')
+  const b = renderTemplate(back, fields, 'back', f)
+  assert.match(f, /<b>格林公式的使用条件<\/b>/)
+  assert.match(f, /\[\.\.\.\]/)
+  assert.match(b, /格林公式的使用条件/)
+  assert.match(b, /class="cloze"/)
+  assert.doesNotMatch(b, /无笔记/)
+})
+
 test('字段按角色分正反面：memory 只在背面，答案只在背面揭示', () => {
   const { front, back } = splitFields(scheme, fields)
-  const frontFields = front.map((item) => item.field)
-  const backFields = back.map((item) => item.field)
-  assert.deepEqual(frontFields, ['问题', '章节定位', '答案'])
+  assert.deepEqual(front.map((item) => item.field), ['问题', '章节定位', '答案'])
   assert.equal(front.find((item) => item.field === '答案').html, '[...]')
-  assert.deepEqual(backFields, ['答案', '笔记', '引用'])
-  assert.match(back.find((item) => item.field === '笔记').html, /区域/)
+  assert.deepEqual(back.map((item) => item.field), ['答案', '笔记', '引用'])
 })
 
 test('渲染出的 HTML 含模型 CSS 与正反面分区', () => {
+  const split = splitFields(scheme, fields)
   const html = buildCardsHtml({
-    cards: [splitFields(scheme, fields)],
+    cards: [{ frontHtml: fieldsToHtml(split.front), backHtml: fieldsToHtml(split.back) }],
     css: '.card{color:#123}',
     title: '测试',
   })
