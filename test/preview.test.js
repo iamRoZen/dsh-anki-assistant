@@ -33,6 +33,16 @@ test('挖空：正面隐藏、背面揭示', () => {
   assert.equal(clozeFront('无挖空'), '无挖空')
 })
 
+test('公式里的 }} 不会提前结束挖空', () => {
+  const field = '{{c1::取 \\(v=[\\,1\\ 2\\,]^{\\mathrm{T}}\\)、\\(w=[\\,3\\ 6\\,]^{\\mathrm{T}}\\) 两组}}'
+  assert.equal(clozeFront(field), '[...]')
+  const back = clozeBack(field)
+  assert.match(back, /mathrm\{T\}/)
+  assert.match(back, /两组/)
+  assert.match(back, /^<span class="cloze">/)
+  assert.match(back, /两组<\/span>$/)
+})
+
 test('真实模板：字段替换、FrontSide、条件段、cloze 两面不同', () => {
   const front = '{{#问题}}<b>{{问题}}</b>{{/问题}}{{cloze:答案}}'
   const back = '{{FrontSide}}<hr>{{cloze:答案}}{{^笔记}}（无笔记）{{/笔记}}'
