@@ -64,7 +64,7 @@ for (const [scheme, label] of [[textbook, 'qac-memory 教材驱动'], [exam, 'qa
 // 教材驱动：先归组再出题，答案按原文编号成树
 const textbookCard = card({
   问题: '抗高血压药哌唑嗪的不良反应按发生率如何排列？',
-  章节定位: '药理学（第10版） || 第十一章 肾上腺素受体阻断药 || 哌唑嗪',
+  章节定位: '药理学（第10版） ‖ 第十一章 肾上腺素受体阻断药 ‖ 哌唑嗪',
   答案: '{{c1::<b>1.</b> 晕厥：多由直立性低血压引起<br><b>2.</b> 发生率由高到低：眩晕、头痛、嗜睡、精神差、心悸、恶心<br><b>3.</b> 多发生在服药初期，可耐受}}',
   笔记: '晕厥单独挂机制；排序记成一条下坡路',
   引用: '药理学（第10版）, 人民卫生出版社 ‖ p120:L10-11',
@@ -73,7 +73,7 @@ const textbookCard = card({
 // 题源驱动：先列题、逐题取证，题源进引用
 const examCard = card({
   问题: '哌唑嗪首剂为何要控制在 0.5mg 并卧床数小时？',
-  章节定位: '药理学（第10版） || 第十一章 肾上腺素受体阻断药 || 哌唑嗪',
+  章节定位: '药理学（第10版） ‖ 第十一章 肾上腺素受体阻断药 ‖ 哌唑嗪',
   答案: '{{c1::<b>1.</b> 首剂易致晕厥，多为直立性低血压<br><b>2.</b> 给药：初始 0.5mg，睡前服，保持卧床数小时<br><b>3.</b> 目的：降低首剂晕厥风险}}',
   笔记: '先想"为什么要防"，再记 0.5mg／睡前／卧床',
   引用: '题源：药理学期末题库 第12题；药理学（第10版）, 人民卫生出版社 ‖ p120:L6-9',
@@ -125,11 +125,9 @@ const bVerify = await verifyCommitted({ root: DATA, planId: bPlan.plan.id, anki 
 say(`  产物：note ${bOutcomes[0].noteId}（同一张卡，答案改成表格；改动字段 ${bOutcomes[0].changed?.join('、')}；回读异常 ${bVerify.mismatches.length}）`)
 say()
 
-// ── C. 只出问题集的方案：没有 Anki 模型也能跑 ───────────
-say('## C. 只交问题集的方案：不需要 Anki 模型')
-
-const qs = await saveScheme(DATA, { ...seeds.find((s) => s.id === 'question-set'), changeWhy: '首版' })
-say(`- ${qs.id}@${qs.version} deliverable=${qs.deliverable} model=${JSON.stringify(qs.output.model)} fields=${qs.output.fields.length}`)
+// ── C. 只出问题集：不是方案，是这次只跑两个能力 ───────────
+say('## C. 只交问题集：方案库不参与，也不需要 Anki 模型')
+say('- 方案按卡型组织；这次只跑「资料整理 + 问题集整理」，不选方案、不建批次')
 
 const questionSet = [
   { id: 'q1', question: '哌唑嗪首剂为什么要睡前服？', type: '机制', source: 'p120:L6-9' },
@@ -148,14 +146,13 @@ say('## D. 改一条步骤：qac-exam v1 → v2')
 
 const v1 = await getScheme(DATA, 'qac-exam', 1)
 const v2 = await saveScheme(DATA, {
-  ...seeds.find((s) => s.id === 'qac-exam'),
-  methods: seeds.find((s) => s.id === 'qac-exam').methods.map((step) => (step.stage === 'organize'
+  ...v1,
+  methods: v1.methods.map((step) => (step.stage === 'organize'
     ? { ...step, how: '先把题目原样列出并**先查重**（首字段已存在就并入旧卡）；题干不改写' }
     : step)),
   quality: {
-    ...seeds.find((s) => s.id === 'qac-exam').quality,
-    rules: [...seeds.find((s) => s.id === 'qac-exam').quality.rules,
-      { id: 'cite-source', field: '引用', kind: 'startsWith', value: '题源：' }],
+    ...v1.quality,
+    rules: [...v1.quality.rules, { id: 'cite-source', field: '引用', kind: 'startsWith', value: '题源：' }],
   },
   changeWhy: '出题前先查重；引用必须以"题源："开头',
 })

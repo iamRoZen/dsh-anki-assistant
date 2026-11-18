@@ -1,35 +1,24 @@
 [
   {
     "id": "qac-memory",
-    "title": "教材驱动·概念关系出题",
-    "whenToUse": "从章节结构出发生成问题：先看目录与小节标题，归组后出题，再回原文取证",
+    "title": "教材驱动·概念关系出题（QAC 六字段）",
+    "whenToUse": "从章节结构出发生成问题：先归组，再出题，再回原文取证",
     "modules": ["资料整理", "问题集整理", "撰写答案", "制作卡片", "记忆指导"],
     "model": "QAC 问答挖空 v4（国标引用）",
     "template": "qac-v4",
     "deliverable": "cards",
-    "doc": "qac-textbook.md",
-    "tags": ["教材", "概念关系", "出卡"]
+    "doc": "qac-memory.md",
+    "tags": ["教材", "概念关系", "QAC"]
   },
   {
     "id": "qac-exam",
-    "title": "题源驱动·逐题取证",
+    "title": "题源驱动·逐题取证（QAC 六字段）",
     "whenToUse": "已有题目：先列题，再逐题按小节标题找依据，答案只回答这道题",
     "modules": ["问题集整理", "资料整理", "撰写答案", "制作卡片", "记忆指导"],
     "model": "QAC 问答挖空 v4（国标引用）",
     "template": "qac-v4",
     "deliverable": "cards",
     "doc": "qac-exam.md",
-    "tags": ["真题", "题库", "出卡"]
-  },
-  {
-    "id": "question-set",
-    "title": "只交问题集（不出卡）",
-    "whenToUse": "只要复习清单或题库初稿；不需要 Anki 模型，也不写卡",
-    "modules": ["资料整理", "问题集整理"],
-    "model": null,
-    "template": null,
-    "deliverable": "question-set",
-    "doc": "question-set.md",
-    "tags": ["不出卡", "问题集"]
+    "tags": ["真题", "题库", "QAC"]
   }
 ]
