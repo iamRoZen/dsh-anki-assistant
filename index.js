@@ -20,6 +20,7 @@ import {
 } from './lib/batch.js'
 import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteError } from './lib/write.js'
 import { findLines, readMaterial } from './lib/materials.js'
+import { scanCloze } from './lib/cloze.js'
 import { buildCardsHtml, buildPrintHtml, fieldsToHtml, measureOverflow, openFile, renderPdf, renderPng, renderTemplate, splitFields } from './lib/preview.js'
 import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readPackageSchemeRecord, readSchemeBody, readTemplate, refreshSchemeAssets, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
@@ -424,7 +425,14 @@ export function apply(ctx, config = {}) {
           const fields = Object.fromEntries(
             scheme.output.fields.map((field) => [field.name, item.fields?.[field.name] ?? '']),
           )
-          const issues = evaluate(fields, scheme.quality?.rules)
+          const issues = [
+            ...evaluate(fields, scheme.quality?.rules),
+            ...scanCloze(fields['答案']).map((issue) => ({
+              ruleId: `cloze:${issue.code}`,
+              field: '答案',
+              message: issue.message,
+            })),
+          ]
           if (legacyValidator) {
             let verdict
             try {
