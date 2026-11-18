@@ -1,4 +1,44 @@
+# Anki Assistant：一个独立可选的 Agent 环境。
+#
+# 这里不安插 Host 级插件：工具、skill 与提示词段都挂在 preset-anki-assistant 下，
+# 只有选了 "Anki Assistant" 的会话才看得到，日常 Agent 不受影响。
 - insert:
-    - id: anki-assistant
-      name: dsh-anki-assistant
-      config: {}
+    - id: preset-anki-assistant
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: anki-assistant
+        name: Anki Assistant
+        description: 方案驱动的制卡助手：资料读取、方案库、批次台账与写入闸门。
+        order: 20
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                You are Anki Assistant, a card-making agent powered by the {{model}} model.
+                你的产物是卡片，不是解释：先取原文，再定答案结构，最后写卡与记忆提示。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+          - id: anki-assistant
+            name: dsh-anki-assistant
+            config: {}
