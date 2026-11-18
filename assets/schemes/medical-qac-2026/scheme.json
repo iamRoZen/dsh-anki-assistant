@@ -1,0 +1,62 @@
+{
+  "id": "medical-qac-2026",
+  "status": "draft",
+  "deliverable": "cards",
+  "title": "QAC 六字段·旧实践归纳版",
+  "appliesTo": {
+    "cardTypes": ["主观题", "名词解释", "机制类问答"],
+    "subjects": ["医学"],
+    "materials": ["教材", "题库", "真题"]
+  },
+  "inputs": [
+    { "kind": "textbook", "required": true, "note": "页行可回读" },
+    { "kind": "question", "required": false, "note": "有题源时按题取证" }
+  ],
+  "methods": [
+    { "stage": "collect", "how": "按【小节标题】定位，不按概念词；记 p<PDF页>:L<行>", "produces": "页行与原文" },
+    { "stage": "organize", "how": "判根数、判形状；骨架只写编号与分支名", "produces": "骨架" },
+    { "stage": "solve", "how": "按骨架填内容，再压缩；不删层级、限定语、方向", "produces": "答案树" },
+    { "stage": "make", "how": "按模板填字段；字当量实算；序号树或表格按原文结构选", "produces": "卡" },
+    { "stage": "advise", "how": "笔记写回忆起点与最易漏的一步", "produces": "记忆提示" }
+  ],
+  "output": {
+    "model": "QAC 问答挖空 v4（国标引用）",
+    "template": "qac-v4",
+    "fields": [
+      { "name": "问题", "role": "content", "spec": "题干或条目名；以「？」结尾；不出现答案关键词", "required": true },
+      { "name": "章节定位", "role": "locator", "spec": "书名 ‖ 篇 ‖ 章 ‖ 节 ‖ 小节，全角 ‖ 分隔", "required": true },
+      { "name": "要点数", "role": "meta", "spec": "字当量（汉字+ASCII/2+公式起价），写 `N字`；180 为硬上限", "required": true },
+      { "name": "答案", "role": "content", "spec": "整段 {{c1:: … }}；<b>1.</b>/<b>1.1</b> 块首；单行 ≤25 字当量；表格仅用于同维度对照", "required": true },
+      { "name": "笔记", "role": "memory", "spec": "留空或只写不能进答案的补充；记忆提示不复述答案", "required": false },
+      { "name": "引用", "role": "locator", "spec": "题源（可无）+ 书目 + ‖ p页:L起-止", "required": true }
+    ]
+  },
+  "presentation": {
+    "forms": ["outline", "table"],
+    "chooseBy": "并列或分层 → 序号树；同一维度行列对照 → 表格；判断依据是原文结构"
+  },
+  "quality": {
+    "rules": [
+      { "id": "q-ask", "field": "问题", "kind": "endsWith", "value": "？" },
+      { "id": "a-cloze", "field": "答案", "kind": "clozeShape" },
+      { "id": "a-weight", "field": "答案", "kind": "weight", "value": 180 },
+      { "id": "a-ordinal", "field": "答案", "kind": "ordinal" },
+      { "id": "a-lines", "field": "答案", "kind": "lineLimit", "value": 25 },
+      { "id": "a-table", "field": "答案", "kind": "tableCells" },
+      { "id": "meta-weight", "field": "要点数", "kind": "weightOf", "sourceField": "答案" },
+      { "id": "loc-form", "field": "章节定位", "kind": "matches", "value": "‖" },
+      { "id": "cite-locator", "field": "引用", "kind": "matches", "value": "‖\\s*p\\d+:L?\\d+" }
+    ],
+    "rubric": "分支名必须有出处；判根数（两个互不依赖的根就拆）；压缩不删层级/限定语/方向；记忆提示只写怎么背"
+  },
+  "acceptance": { "criteria": "先做 3 张样卡，逐条对照原文；样卡不过不批量" },
+  "limits": [
+    "仅覆盖旧 medical_qac 方案 + 内科学/外科学实践；其它学科未验证",
+    "样卡 HTML 原文未逐字留存处，规则依据只到文档级（见 evidence.md 的「依据不足」）",
+    "表格表头行号口径与答案树 rN 不同（旧 structure.py 注释已指出），未统一"
+  ],
+  "origin": {
+    "kind": "induced",
+    "ref": "旧 schemes/medical_qac + SKILL.md + local/2026-11-16-surgery-* + tools/{measure,structure}.py"
+  }
+}

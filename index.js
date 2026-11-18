@@ -19,7 +19,7 @@ import {
 } from './lib/batch.js'
 import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteError } from './lib/write.js'
 import { findLines, readMaterial } from './lib/materials.js'
-import { getPracticeSync, listPracticesSync, practicesForScheme, readSchemeBody, readTemplate, schemeBodyPath, seedLibrarySync } from './lib/library.js'
+import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readSchemeBody, readTemplate, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
 
 const PROVIDER = 'anki-assistant'
@@ -115,6 +115,17 @@ export function apply(ctx, config = {}) {
         const seeds = JSON.parse(readFileSync(new URL('./assets/schemes/seed.json', import.meta.url), 'utf8'))
         const added = await seedSchemes(store.root, seeds)
         seedLibrarySync(store.root, ASSETS)
+        seedSchemeDirsSync(store.root, ASSETS)
+        // 目录式方案（自带 scheme.json）首次运行登记为 v1
+        for (const entry of readdirSync(new URL('./assets/schemes/', import.meta.url), { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue
+          if (await getScheme(store.root, entry.name)) continue
+          const record = readAssetSchemeJson(store.root, entry.name)
+          if (record) {
+            const saved = await saveScheme(store.root, { ...record, changeWhy: '归纳方案种子' })
+            added.push(`${saved.id}@${saved.version}`)
+          }
+        }
         return { added }
       })()
     }
@@ -126,6 +137,7 @@ export function apply(ctx, config = {}) {
     const seeds = JSON.parse(readFileSync(new URL('./assets/schemes/seed.json', import.meta.url), 'utf8'))
     seedSchemesSync(store.root, seeds)
     seedLibrarySync(store.root, ASSETS)
+    seedSchemeDirsSync(store.root, ASSETS)
   } catch (error) {
     // 播种失败不阻塞加载；工具调用时 boot() 会再试一次并给出错误
   }
