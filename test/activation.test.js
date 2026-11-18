@@ -54,14 +54,18 @@ test('每个工具都有参数、输出 schema 与 render', async () => {
   }
 })
 
-test('skill 提供正文，且正文包含字段与写入要点', async () => {
+test('skill 提供正文：能力目录，而非固定流程', async () => {
   const { ctx } = await mount()
   const candidates = await ctx.skills.provider.list()
   assert.equal(candidates.length, 1)
   assert.equal(candidates[0].name, 'anki-assistant')
   const skill = await ctx.skills.provider.get(candidates[0])
-  assert.match(skill.content, /记忆提示是卡的一个字段/)
-  assert.match(skill.content, /card_write/)
+  assert.match(skill.content, /能力目录/)
+  assert.match(skill.content, /对象要求 ≠ 呈现形式/)
+  assert.match(skill.content, /scheme get/)
+  // 通用层不该再规定固定四步或行长
+  assert.doesNotMatch(skill.content, /四步/)
+  assert.doesNotMatch(skill.content, /25 字|25字/)
 })
 
 test('提示词段列出种子方案', async () => {
