@@ -261,16 +261,26 @@ export function apply(ctx, config = {}) {
         const scheme = await getScheme(store.root, args.scheme, args.schemeVersion)
         if (!scheme) throw new Error(`没有方案 ${args.scheme}`)
         if (!args.deck || !args.model) throw new Error('open 需要 deck 和 model')
-        let batch = createBatch({
+        // 同名再 open 视为改绑：换方案版本或换目标，已写的题保持原状。
+        const existing = await loadBatch(store.root, name)
+        let batch = existing ?? createBatch({
           id: name,
           title: args.title ?? '',
           scheme,
           target: { deck: args.deck, model: args.model },
         })
+        batch.scheme = { id: scheme.id, version: scheme.version }
+        batch.target = { deck: args.deck, model: args.model }
+        if (args.title) batch.title = args.title
         batch.fields = scheme.output.fields.map((field) => field.name)
         const applied = upsertItems(batch, args.items ?? [])
         await saveBatch(store.root, batch)
-        return { summary: summarize(batch), items: view(batch), ...applied }
+        return {
+          summary: summarize(batch),
+          items: view(batch),
+          ...applied,
+          warnings: existing ? [`已把批次改绑到 ${scheme.id}@${scheme.version}`] : [],
+        }
       }
 
       const batch = await loadBatch(store.root, name)

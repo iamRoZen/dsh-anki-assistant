@@ -87,6 +87,29 @@ test('scheme save 需要 changeWhy，否则拒绝', async () => {
   )
 })
 
+test('同名再 open 视为改绑：换目标、保留题目', async () => {
+  const { tools } = await mount()
+  const batch = tools.get('batch')
+  await batch.execute({
+    action: 'open',
+    batch: 'b1',
+    scheme: 'qac-memory',
+    deck: '旧牌组',
+    model: 'QAC 问答挖空 v4（国标引用）',
+    items: [{ id: 'i1', fields: { 问题: '这是什么？', 答案: '{{c1::答案}}' } }],
+  }, {})
+  const again = await batch.execute({
+    action: 'open',
+    batch: 'b1',
+    scheme: 'qac-memory',
+    deck: '新牌组',
+    model: 'QAC 问答挖空 v4（国标引用）',
+  }, {})
+  assert.equal(again.summary.deck, '新牌组')
+  assert.equal(again.summary.total, 1)
+  assert.match((again.warnings ?? []).join(''), /改绑/)
+})
+
 test('batch open 缺参数时报错清楚', async () => {
   const { tools } = await mount()
   await assert.rejects(
