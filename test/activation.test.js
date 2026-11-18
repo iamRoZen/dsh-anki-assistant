@@ -147,6 +147,43 @@ test('提示词段约束学科中立：不出现具体病名', async () => {
   assert.match(text, /scheme get/)
 })
 
+test('网上拿来的自然语言提示词可原样存成方案，正文按版本快照', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  const prompt = '# 卡片三段式\n\n1. 先问这张卡要解决什么困惑。\n2. 答案只写一句。\n3. 末尾补一句为什么。\n'
+
+  const saved = await scheme.execute({
+    action: 'save',
+    scheme: { id: 'feynman-cards', title: '费曼三段式', status: 'draft' },
+    body: prompt,
+    changeWhy: '导入外部提示词',
+  }, {})
+  // 只有 id/title/status/body 也能存：交付物推断为 method，没有模型与字段
+  assert.equal(saved.scheme.deliverable, 'method')
+  assert.equal(saved.scheme.output.fields.length, 0)
+  assert.equal(saved.scheme.methods.length, 0)
+
+  const got = await scheme.execute({ action: 'get', id: 'feynman-cards' }, {})
+  assert.equal(got.scheme.body.trim(), prompt.trim())
+
+  const found = await scheme.execute({ action: 'list', includeDrafts: true, query: '三段式' }, {})
+  assert.equal(found.schemes.some((entry) => entry.id === 'feynman-cards'), true)
+  const byBody = await scheme.execute({ action: 'list', includeDrafts: true, query: '困惑' }, {})
+  assert.equal(byBody.schemes.some((entry) => entry.id === 'feynman-cards'), true)
+
+  // 改正文 → 新版本，旧版正文仍可读
+  await scheme.execute({
+    action: 'save',
+    scheme: { id: 'feynman-cards', title: '费曼三段式', status: 'draft' },
+    body: `${prompt}\n4. 别超过三句。\n`,
+    changeWhy: '加一条限制',
+  }, {})
+  const v1 = await scheme.execute({ action: 'get', id: 'feynman-cards', version: 1 }, {})
+  const v2 = await scheme.execute({ action: 'get', id: 'feynman-cards', version: 2 }, {})
+  assert.doesNotMatch(v1.scheme.body, /别超过三句/)
+  assert.match(v2.scheme.body, /别超过三句/)
+})
+
 test('batch open 缺参数时报错清楚', async () => {
   const { tools } = await mount()
   await assert.rejects(

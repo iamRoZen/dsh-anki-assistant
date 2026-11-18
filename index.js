@@ -4,7 +4,7 @@
  * 这一层只做两件事：把数据层的确定性操作暴露成工具，并把"什么时候该用哪一层"
  * 写进提示词。它不产出步骤序列——顺序由 Agent 决定。
  */
-import { readFileSync, readdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -139,9 +139,11 @@ export function apply(ctx, config = {}) {
       action: { type: 'string', required: true, enum: ['list', 'get', 'save'] },
       id: { type: 'string', description: '方案 id（get/save 必填）' },
       version: { type: 'integer', description: '版本号，缺省取当前 active' },
-      scheme: { type: 'object', additionalProperties: true, description: 'save 时的完整方案对象' },
+      scheme: { type: 'object', additionalProperties: true, description: 'save 时的方案对象（除 id/title/status 外都可省略）' },
+      body: { type: 'string', description: 'save 时的方案正文（Markdown，可原样贴入网上的自然语言提示词）' },
       changeWhy: { type: 'string', description: 'save 时说明这次改了什么、为什么' },
       includeDrafts: { type: 'boolean', description: 'list 时是否包含 draft 方案，默认 false' },
+      query: { type: 'string', description: 'list 时按 id / 标题 / 正文关键词过滤' },
     },
     output: {
       schema: {
@@ -192,13 +194,22 @@ export function apply(ctx, config = {}) {
     async execute(args) {
       await boot()
       if (args.action === 'list') {
-        return { schemes: await listSchemes(store.root, { includeDrafts: Boolean(args.includeDrafts) }) }
+        let schemes = await listSchemes(store.root, { includeDrafts: Boolean(args.includeDrafts) })
+        if (args.query) {
+          const query = String(args.query).toLowerCase()
+          schemes = schemes.filter((entry) => {
+            const meta = `${entry.id} ${entry.title} ${(entry.appliesTo?.cardTypes ?? []).join(' ')}`.toLowerCase()
+            if (meta.includes(query)) return true
+            return (readSchemeBody(store.root, entry.id, entry.version) ?? '').toLowerCase().includes(query)
+          })
+        }
+        return { schemes }
       }
       if (args.action === 'get') {
         if (!args.id) throw new Error('get 需要 id')
         const scheme = await getScheme(store.root, args.id, args.version)
         if (!scheme) throw new Error(`没有方案 ${args.id}${args.version ? `@${args.version}` : ''}`)
-        const body = readSchemeBody(store.root, scheme.id)
+        const body = readSchemeBody(store.root, scheme.id, scheme.version)
         return {
           scheme: {
             ...scheme,
@@ -213,6 +224,12 @@ export function apply(ctx, config = {}) {
       if (!args.scheme.id) throw new Error('save 需要 scheme.id')
       if (!args.changeWhy) throw new Error('save 需要 changeWhy：这次改了什么、为什么')
       const saved = await saveScheme(store.root, { ...args.scheme, changeWhy: args.changeWhy })
+      const dir = join(store.root, 'schemes', saved.id)
+      mkdirSync(dir, { recursive: true })
+      // 正文以用户给的为准；保存时给这一版留一份快照，旧版仍可回看。
+      if (typeof args.body === 'string') writeFileSync(join(dir, 'body.md'), args.body, 'utf8')
+      const bodyFile = join(dir, 'body.md')
+      if (existsSync(bodyFile)) copyFileSync(bodyFile, join(dir, `body.v${saved.version}.md`))
       return { scheme: saved }
     },
   }))
