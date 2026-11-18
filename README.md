@@ -7,10 +7,16 @@
 
 | 工具 | 作用 |
 |---|---|
-| `scheme` | 方案库：`list` / `get` / `save`（永远写新版本） |
-| `batch` | 批次：`open` / `put` / `validate` / `next` / `mark` / `status` |
+| `scheme` | 方案库：`list` / `get`（含正文与实践反查） / `save`（永远写新版本） |
+| `practice` | 实践库：`list` 按方案/模块/标签筛选，`get` 读全文 |
+| `batch` | 批次：`open`（同名再调用=改绑方案版本） / `put` / `validate` / `next` / `mark` / `status` |
 | `materials` | 读资料并给出行号：PDF 按页重建行，可给关键词只取命中行 |
-| `card_write` | 写入闸门：`plan`（只读预览） / `commit`（幂等写入） / `verify`（回读） |
+| `card_write` | 写入闸门：`plan`（add/update 预览） / `commit`（幂等） / `verify`（按提交快照回读） |
+
+## 作用范围
+
+安装后不会改变其他会话：工具、skill 与提示词都挂在 Agent Preset **Anki Assistant** 下，
+只有选了该 preset 的会话才看得到。
 
 ## 依赖
 

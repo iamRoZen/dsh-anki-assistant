@@ -1,0 +1,22 @@
+[
+  {
+    "id": "qac-memory",
+    "title": "问答挖空·带记忆提示",
+    "version": 1,
+    "whenToUse": "要背一条独立线索：定义、并列要点、机制链、数值阈值；能取到教材页行",
+    "modules": ["资料整理", "问题集整理", "撰写答案", "制作卡片", "记忆指导"],
+    "model": "QAC 问答挖空 v4（国标引用）",
+    "doc": "qac-memory.md",
+    "tags": ["医学", "主观题", "序号树", "表格"]
+  },
+  {
+    "id": "cloze-memory",
+    "title": "通用挖空·最小可用",
+    "version": 1,
+    "whenToUse": "只要记一个点：定义、数值、一句因果；用 Cloze 模型",
+    "modules": ["资料整理", "制作卡片", "记忆指导"],
+    "model": "Cloze",
+    "doc": "cloze-memory.md",
+    "tags": ["通用", "单点"]
+  }
+]

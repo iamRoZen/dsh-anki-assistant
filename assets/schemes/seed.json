@@ -23,7 +23,7 @@
       "fields": [
         { "name": "问题", "role": "content", "spec": "单独可读、只问一条线索、以「？」结尾；不写选项，不出现答案里的词", "required": true },
         { "name": "章节定位", "role": "locator", "spec": "书名 ‖ 篇 ‖ 章 ‖ 节；与资料的目录层级一致", "required": true },
-        { "name": "要点数", "role": "meta", "spec": "答案去掉 HTML 标签与挖空标记后的可见字符数，写成 N字；不估", "required": false },
+        { "name": "要点数", "role": "meta", "spec": "答案去掉 HTML 标签与挖空标记后的可见字符数，写成 N字；不估", "required": true },
         { "name": "答案", "role": "content", "spec": "整段包在 {{c1:: … }} 里；序号用 <b>1.</b> / <b>1.1</b> 放段首；单行不超过 25 字", "required": true },
         { "name": "笔记", "role": "memory", "spec": "记忆提示：这张卡怎么背（回忆起点、递推关系、最容易漏的一步），两行以内；不是答案的复述", "required": false },
         { "name": "引用", "role": "locator", "spec": "书目 + ‖ p页:L起-止；定位必须能回读到原文", "required": false }
@@ -37,7 +37,7 @@
         { "id": "a-length", "field": "答案", "kind": "maxLength", "value": 220 },
         { "id": "a-no-markdown", "field": "答案", "kind": "forbids", "value": "\\*\\*" },
         { "id": "locate-required", "field": "章节定位", "kind": "required" },
-        { "id": "meta-format", "field": "要点数", "kind": "matches", "value": "^\\d+字$" }
+        { "id": "meta-length", "field": "要点数", "kind": "lengthOf", "sourceField": "答案" }
       ],
       "rubric": "逐点核对原文；分支名必须来自原文标题；压缩不能删层级、限定语、方向；记忆提示只写怎么背，不复述答案"
     },

@@ -14,7 +14,8 @@ import { createStore } from '../lib/store.js'
 import { getScheme, seedSchemes } from '../lib/scheme.js'
 import { createAnki } from '../lib/anki.js'
 import { createBatch, upsertItems, saveBatch, loadBatch, summarize } from '../lib/batch.js'
-import { buildPlan, commitPlan, verifyWritten } from '../lib/write.js'
+import { buildPlan, commitPlan, verifyCommitted } from '../lib/write.js'
+import { visibleLength } from '../lib/rules.js'
 import { readFileSync } from 'node:fs'
 
 const DATA = process.env.DATA_DIR ?? join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'anki-assistant')
@@ -69,15 +70,7 @@ const items = [
   },
 ]
 
-// 要点数 = 去掉挖空标记与 HTML 标签后的可见字符数，不手填
-function visibleLength(html) {
-  return [...String(html)
-    .replace(/\{\{c\d+::/g, '')
-    .replace(/\}\}/g, '')
-    .replace(/<br\s*\/?>/gi, '')
-    .replace(/<[^>]+>/g, '')].length
-}
-
+// 要点数 = 去掉挖空标记与 HTML 标签后的可见字符数，由规则复核
 for (const item of items) {
   item.fields.要点数 = `${visibleLength(item.fields.答案)}字`
 }
@@ -132,8 +125,8 @@ console.log(`\n=== 写入 ===\n成功 ${ok}，失败 ${outcomes.length - ok}`)
 for (const entry of outcomes.filter((entry) => !entry.ok)) console.log(`✗ ${entry.id}：${entry.error}`)
 
 const reloaded = await loadBatch(DATA, batchId)
-const verify = await verifyWritten({ plan, batch: reloaded, anki })
-console.log(`\n=== 回读 ===\n核对 ${verify.checked} 张，字段不一致 ${verify.mismatches.length} 处`)
-for (const mismatch of verify.mismatches) console.log(`✗ ${mismatch.id} 字段 ${mismatch.field}`)
+const verify = await verifyCommitted({ root: DATA, planId: plan.id, anki })
+console.log(`\n=== 回读 ===\n核对 ${verify.checked} 张，异常 ${verify.mismatches.length} 处`)
+for (const mismatch of verify.mismatches) console.log(`✗ ${mismatch.id} ${mismatch.field}：${mismatch.message}`)
 console.log('批次状态：', JSON.stringify(summarize(reloaded).counts))
 console.log('数据目录：', DATA)

@@ -17,8 +17,9 @@ import { createAnki, AnkiError } from './lib/anki.js'
 import {
   batchFile, createBatch, loadBatch, nextItem, saveBatch, setStatus, summarize, upsertItems, view,
 } from './lib/batch.js'
-import { buildPlan, commitPlan, loadPlan, verifyWritten, WriteError } from './lib/write.js'
+import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteError } from './lib/write.js'
 import { findLines, readMaterial } from './lib/materials.js'
+import { getPracticeSync, listPracticesSync, practicesForScheme, readSchemeBody, schemeBodyPath, seedLibrarySync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
 
 const PROVIDER = 'anki-assistant'
@@ -113,6 +114,7 @@ export function apply(ctx, config = {}) {
         await store.init()
         const seeds = JSON.parse(readFileSync(new URL('./assets/schemes/seed.json', import.meta.url), 'utf8'))
         const added = await seedSchemes(store.root, seeds)
+        seedLibrarySync(store.root, ASSETS)
         return { added }
       })()
     }
@@ -123,6 +125,7 @@ export function apply(ctx, config = {}) {
   try {
     const seeds = JSON.parse(readFileSync(new URL('./assets/schemes/seed.json', import.meta.url), 'utf8'))
     seedSchemesSync(store.root, seeds)
+    seedLibrarySync(store.root, ASSETS)
   } catch (error) {
     // 播种失败不阻塞加载；工具调用时 boot() 会再试一次并给出错误
   }
@@ -170,6 +173,12 @@ export function apply(ctx, config = {}) {
           if (scheme.quality?.rubric) lines.push(`人工判据：${scheme.quality.rubric}`)
           if (scheme.acceptance?.criteria) lines.push(`验收：${scheme.acceptance.criteria}`)
           for (const limit of scheme.limits ?? []) lines.push(`局限：${limit}`)
+          if (value.scheme.practices?.length) {
+            lines.push(`用过它的实践：${value.scheme.practices.map((entry) => `${entry.id}（v${entry.version}）`).join('、')}`)
+          }
+          if (value.scheme.body) {
+            lines.push('', '--- 方案正文 ---', String(value.scheme.body).slice(0, 12000))
+          }
           return text(lines.join('\n'))
         }
         return text((value.schemes ?? [])
@@ -186,7 +195,15 @@ export function apply(ctx, config = {}) {
         if (!args.id) throw new Error('get 需要 id')
         const scheme = await getScheme(store.root, args.id, args.version)
         if (!scheme) throw new Error(`没有方案 ${args.id}${args.version ? `@${args.version}` : ''}`)
-        return { scheme }
+        const body = readSchemeBody(store.root, scheme.id)
+        return {
+          scheme: {
+            ...scheme,
+            body,
+            bodyPath: schemeBodyPath(store.root, scheme.id),
+            practices: practicesForScheme(store.root, scheme.id),
+          },
+        }
       }
       if (!args.scheme) throw new Error('save 需要 scheme 对象')
       if (!args.scheme.id) throw new Error('save 需要 scheme.id')
@@ -427,6 +444,7 @@ export function apply(ctx, config = {}) {
       action: { type: 'string', required: true, enum: ['plan', 'commit', 'verify'] },
       batch: { type: 'string', description: 'plan/verify 时的批次 id' },
       plan: { type: 'string', description: 'commit/verify 时的计划 id' },
+      mode: { type: 'string', enum: ['add', 'update'], description: 'plan 时：add 新建卡（默认），update 改已有卡（题上需有 noteId）' },
     },
     output: {
       schema: {
@@ -454,10 +472,10 @@ export function apply(ctx, config = {}) {
         if (!batch) throw new Error(`没有批次 ${args.batch}`)
         const scheme = await getScheme(store.root, batch.scheme.id, batch.scheme.version)
         if (!scheme) throw new Error(`批次钉住的方案 ${batch.scheme.id}@${batch.scheme.version} 读不到`)
-        const { plan, blocked } = await buildPlan({ root: store.root, batch, scheme, anki })
+        const { plan, blocked } = await buildPlan({ root: store.root, batch, scheme, anki, mode: args.mode ?? 'add' })
         const ready = plan.items.filter((item) => item.status === 'ready').length
         const lines = [
-          `计划 ${plan.id}｜${plan.deck} / ${plan.model}｜可写 ${ready} 张，受阻 ${blocked.length} 张`,
+          `计划 ${plan.id}｜${plan.mode === 'update' ? '改卡' : '新增'}｜${plan.deck} / ${plan.model}｜可写 ${ready} 张，受阻 ${blocked.length} 张`,
         ]
         if (plan.modelIssues.length) {
           for (const issue of plan.modelIssues) lines.push(`✗ ${issue.message}`)
@@ -494,27 +512,66 @@ export function apply(ctx, config = {}) {
       }
 
       if (args.action === 'verify') {
-        const plan = args.plan ? await loadPlan(store.root, args.plan) : null
-        const batchId = args.batch ?? plan?.batchId
-        if (!batchId) throw new Error('verify 需要 batch 或 plan')
-        const batch = await loadBatch(store.root, batchId)
-        if (!batch) throw new Error(`没有批次 ${batchId}`)
-        const scheme = await getScheme(store.root, batch.scheme.id, batch.scheme.version)
-        const result = await verifyWritten({ plan: plan ?? { batchId }, batch, anki })
-        const lines = [`回读 ${result.checked} 张，字段不一致 ${result.mismatches.length} 处`]
+        if (!args.plan) throw new Error('verify 需要 plan：回读对照的是那次提交的快照')
+        const record = await loadCommit(store.root, args.plan)
+        if (!record) throw new Error(`没有 ${args.plan} 的提交记录，先 commit`)
+        const result = await verifyCommitted({ root: store.root, planId: args.plan, anki })
+        const lines = [`回读 ${result.checked} 张（${result.mode === 'update' ? '改卡' : '新增'}），异常 ${result.mismatches.length} 处`]
         for (const mismatch of result.mismatches) {
-          lines.push(`✗ ${mismatch.id}（#${mismatch.noteId}）字段 ${mismatch.field}`)
+          lines.push(`✗ ${mismatch.id}（#${mismatch.noteId}）${mismatch.field}：${mismatch.message}`)
         }
-        if (result.mismatches.length === 0 && scheme) lines.push('字段与计划一致')
-        return {
-          plan: plan?.id ?? '',
-          checked: result.checked,
-          mismatches: result.mismatches,
-          text: lines.join('\n'),
-        }
+        if (result.mismatches.length === 0 && result.checked > 0) lines.push('与提交快照一致')
+        return { plan: args.plan, checked: result.checked, mismatches: result.mismatches, text: lines.join('\n') }
       }
 
       throw new Error(`未知 action ${args.action}`)
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'practice',
+    description:
+      '实践库：每次真实制卡留下的记录。list 给摘要，可按方案、模块或标签筛选；'
+      + 'get 读全文——原始请求、用了哪些模块、方案版本、关键取舍、产物与核查结果。',
+    parameters: {
+      action: { type: 'string', required: true, enum: ['list', 'get'] },
+      id: { type: 'string', description: 'get 时的实践 id（文件名去掉 .md）' },
+      scheme: { type: 'string', description: 'list 时按方案 id 过滤' },
+      module: { type: 'string', description: 'list 时按模块过滤，如 制作卡片' },
+      tag: { type: 'string', description: 'list 时按标签过滤' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          cases: { type: 'array', items: { type: 'object', additionalProperties: true, properties: {} } },
+          case: { type: 'object', additionalProperties: true, properties: {} },
+        },
+      },
+      render(_args, value) {
+        if (value.case) {
+          return text(`${value.case.title ?? value.case.id}\n\n${String(value.case.body ?? '').slice(0, 12000)}`)
+        }
+        if (!value.cases?.length) return text('还没有实践记录')
+        return text(value.cases
+          .map((entry) => `${entry.id}｜${entry.date ?? ''}｜${(entry.modules ?? []).join('/')}｜${entry.scheme ? `${entry.scheme.id}@${entry.scheme.version}` : '无方案'}`)
+          .join('\n'))
+      },
+    },
+    async execute(args) {
+      await boot()
+      if (args.action === 'get') {
+        if (!args.id) throw new Error('get 需要 id')
+        const found = getPracticeSync(store.root, args.id)
+        if (!found) throw new Error(`没有实践 ${args.id}`)
+        return { case: found }
+      }
+      let cases = listPracticesSync(store.root)
+      if (args.scheme) cases = cases.filter((entry) => entry.scheme?.id === args.scheme)
+      if (args.module) cases = cases.filter((entry) => (entry.modules ?? []).includes(args.module))
+      if (args.tag) cases = cases.filter((entry) => (entry.tags ?? []).includes(args.tag))
+      return { cases }
     },
   }))
 
@@ -527,12 +584,13 @@ export function apply(ctx, config = {}) {
       const index = schemeIndexSync(settings.dataDir)
       return [
         '## Anki Assistant',
-        '先判断工作尺度，再动手：单张卡或一次小改直接用工具做完（不要建任务）；一批卡用 batch；',
-        '要留可检查的中间文档或跨会话继续，才把它当项目推进。',
-        '动手前先 scheme list 看有没有合适方案；方案里写了字段规范和验收规则，照它做，不要另起一套。',
-        '取原文按【小节标题】检索，不按概念词；原文页码与行号写进定位字段，方便回查。',
-        '记忆指导是卡的一个字段（role=memory），写在卡里，不另发讲解；它是"怎么背"，不是答案的重复。',
-        '批量写入前先 card_write plan，把预览给用户看；用户确认后再 commit。',
+        '制卡四步：取原文 → 问题集 → 答案 → 卡片；记忆提示写进卡的 memory 字段。',
+        '单张卡或一次小改直接用工具做完；一批卡用 batch；要留可检查的中间文档或跨会话继续，才当项目推进。',
+        '动手前先 scheme list，选中后 scheme get 会带回完整正文——正文里的字段写法、检查标准、正反例就是权威规则。',
+        '想学某套方案实际怎么跑：practice list 按方案筛，practice get 读全文。',
+        '取原文按【小节标题】检索，返回的 p页:L行 直接写进定位字段。',
+        '批量写入前先 card_write plan，把预览给用户看；确认后再 commit，随后 verify 按提交快照回读。',
+        '改了草稿、方案版本或目标牌组，旧计划就作废，必须重新 plan。',
         '用户从一次改卡里体现出新方法时，先记成 draft 方案并说明，经用户确认再 active。',
         index.length ? `现有方案：\n${index.slice(0, 15).join('\n')}` : '现有方案：无（用 scheme save 建档）',
       ].join('\n')

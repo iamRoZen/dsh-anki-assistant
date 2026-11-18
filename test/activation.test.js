@@ -38,9 +38,9 @@ async function mount() {
   return { ctx, tools, dataDir }
 }
 
-test('注册四个工具，名字稳定', async () => {
+test('注册五个工具，名字稳定', async () => {
   const { tools } = await mount()
-  assert.deepEqual([...tools.keys()].sort(), ['batch', 'card_write', 'materials', 'scheme'])
+  assert.deepEqual([...tools.keys()].sort(), ['batch', 'card_write', 'materials', 'practice', 'scheme'])
 })
 
 test('每个工具都有参数、输出 schema 与 render', async () => {
@@ -108,6 +108,39 @@ test('同名再 open 视为改绑：换目标、保留题目', async () => {
   assert.equal(again.summary.deck, '新牌组')
   assert.equal(again.summary.total, 1)
   assert.match((again.warnings ?? []).join(''), /改绑/)
+})
+
+test('scheme get 带回正文与实践反查', async () => {
+  const { tools } = await mount()
+  const value = await tools.get('scheme').execute({ action: 'get', id: 'qac-memory' }, {})
+  assert.match(value.scheme.body, /什么时候用/)
+  assert.equal(Array.isArray(value.scheme.practices), true)
+  assert.equal(value.scheme.practices[0].id, '2026-11-18-药理学-哌唑嗪-三张卡')
+})
+
+test('practice 列出并读出全文', async () => {
+  const { tools } = await mount()
+  const list = await tools.get('practice').execute({ action: 'list' }, {})
+  assert.equal(list.cases.length, 1)
+  assert.equal(list.cases[0].scheme.id, 'qac-memory')
+  const one = await tools.get('practice').execute({ action: 'get', id: '2026-11-18-药理学-哌唑嗪-三张卡' }, {})
+  assert.match(one.case.body, /原始请求/)
+  assert.match(one.case.body, /p120:L6-9/)
+})
+
+test('practice 可按模块与方案过滤', async () => {
+  const { tools } = await mount()
+  const byModule = await tools.get('practice').execute({ action: 'list', module: '制作卡片' }, {})
+  assert.equal(byModule.cases.length, 1)
+  const none = await tools.get('practice').execute({ action: 'list', scheme: 'cloze-memory' }, {})
+  assert.equal(none.cases.length, 0)
+})
+
+test('提示词段约束学科中立：不出现具体病名', async () => {
+  const { ctx } = await mount()
+  const text = ctx.systemPrompt.section.text()
+  assert.doesNotMatch(text, /哌唑嗪|心肌梗死|内科学/)
+  assert.match(text, /scheme get/)
 })
 
 test('batch open 缺参数时报错清楚', async () => {

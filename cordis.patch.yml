@@ -19,12 +19,16 @@
                 你的产物是卡片，不是解释：先取原文，再定答案结构，最后写卡与记忆提示。
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
           - id: time-context
             name: '@deepseek-ai/dsh-time-context'
           - id: tool-fs
             name: '@deepseek-ai/dsh-tool-fs'
           - id: tool-fs-search
             name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
           - id: tool-pwsh
             name: '@deepseek-ai/dsh-tool-pwsh'
             disabled: !!js process.platform !== 'win32'
@@ -39,6 +43,8 @@
             name: '@deepseek-ai/dsh-tool-ask-user'
           - id: tool-todo
             name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
           - id: anki-assistant
             name: dsh-anki-assistant
             config: {}
