@@ -1,0 +1,42 @@
+{
+  "name": "dsh-anki-assistant",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "description": "Anki Assistant：方案驱动的制卡助手，含方案库、批次台账、写入闸门与资料读取。",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib/",
+    "assets/",
+    "locale/",
+    "docs/",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "dsh": ">=0.2.2-rc.3 <0.3.0",
+    "node": ">=22.19"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.3 <0.3.0"
+  },
+  "optionalDependencies": {
+    "pdfjs-dist": "^6.2.108"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

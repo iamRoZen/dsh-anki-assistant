@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Anki Assistant",
+    "description": "方案驱动的 Anki 制卡助手：方案库、批次台账、写入闸门与资料读取。",
+    "detail": "docs/DETAIL.md"
+  }
+}

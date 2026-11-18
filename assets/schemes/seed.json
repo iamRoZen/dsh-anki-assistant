@@ -1,0 +1,87 @@
+[
+  {
+    "id": "qac-memory",
+    "status": "active",
+    "title": "问答挖空·带记忆提示",
+    "appliesTo": {
+      "cardTypes": ["名词解释", "机制类主观题", "要点型问答"],
+      "subjects": ["内科学", "外科学", "药理学", "病理学"],
+      "materials": ["教材", "讲义"]
+    },
+    "inputs": [
+      { "kind": "textbook", "required": true, "note": "能回读到页与行" },
+      { "kind": "question", "required": false, "note": "真题或题库题干；留空则自拟" }
+    ],
+    "methods": [
+      { "stage": "collect", "how": "按【小节标题】在资料里检索，不用概念词过滤；取到能回答题干的那几行，记下页码与行号", "produces": "页行定位" },
+      { "stage": "solve", "how": "逐句对齐原文列可判分点；限定语、方向、阈值不得改写", "produces": "答案骨架与逐条依据" },
+      { "stage": "make", "how": "先把骨架写成编号行，再压缩到考场长度；最后写记忆提示", "produces": "字段齐全的草稿" },
+      { "stage": "advise", "how": "写下这张卡的回忆路径：先想什么、再想什么、哪里最容易漏", "produces": "记忆提示字段" }
+    ],
+    "output": {
+      "model": "QAC 问答挖空 v4（国标引用）",
+      "fields": [
+        { "name": "问题", "role": "content", "spec": "单独可读、只问一条线索、以「？」结尾；不写选项，不出现答案里的词", "required": true },
+        { "name": "章节定位", "role": "locator", "spec": "书名 ‖ 篇 ‖ 章 ‖ 节；与资料的目录层级一致", "required": true },
+        { "name": "要点数", "role": "meta", "spec": "答案的字符数，写成 N字；由工具算或数一遍，不估", "required": false },
+        { "name": "答案", "role": "content", "spec": "整段包在 {{c1:: … }} 里；序号用 <b>1.</b> / <b>1.1</b> 放段首；单行不超过 25 字", "required": true },
+        { "name": "笔记", "role": "memory", "spec": "记忆提示：这张卡怎么背（回忆起点、递推关系、最容易漏的一步），两行以内；不是答案的复述", "required": false },
+        { "name": "引用", "role": "locator", "spec": "书目 + ‖ p页:L起-止；定位必须能回读到原文", "required": false }
+      ]
+    },
+    "quality": {
+      "rules": [
+        { "id": "q-ask", "field": "问题", "kind": "endsWith", "value": "？" },
+        { "id": "a-cloze-open", "field": "答案", "kind": "startsWith", "value": "{{c1::" },
+        { "id": "a-cloze-close", "field": "答案", "kind": "endsWith", "value": "}}" },
+        { "id": "a-length", "field": "答案", "kind": "maxLength", "value": 220 },
+        { "id": "a-no-markdown", "field": "答案", "kind": "forbids", "value": "\\*\\*" },
+        { "id": "locate-required", "field": "章节定位", "kind": "required" }
+      ],
+      "rubric": "逐点核对原文；分支名必须来自原文标题；压缩不能删层级、限定语、方向；记忆提示只写怎么背，不复述答案"
+    },
+    "acceptance": {
+      "criteria": "先做 2–3 张样卡给用户看，确认字段写法与压缩尺度后再批量"
+    },
+    "limits": [
+      "笔记模型需已存在于 Anki；换模型要另建方案",
+      "模型字段顺序决定判重键，方案首字段必须是模型首字段"
+    ],
+    "origin": { "kind": "seed", "note": "随包示例，按本机已有的 QAC 模型写" }
+  },
+  {
+    "id": "cloze-memory",
+    "status": "active",
+    "title": "通用挖空·最小可用",
+    "appliesTo": {
+      "cardTypes": ["单点记忆", "定义", "数值与阈值"],
+      "subjects": ["任意"],
+      "materials": ["教材", "讲义", "网页"]
+    },
+    "inputs": [
+      { "kind": "textbook", "required": true, "note": "任何可读资料" }
+    ],
+    "methods": [
+      { "stage": "collect", "how": "找到讲这件事的那一段，记下页码与行号", "produces": "页行定位" },
+      { "stage": "make", "how": "把要记的那一句写成挖空；上下文留在同一句里，避免只剩孤立词", "produces": "挖空文本" },
+      { "stage": "advise", "how": "在「背面额外」里写一句回忆抓手：先想起什么才能想起它，附页码", "produces": "记忆提示" }
+    ],
+    "output": {
+      "model": "Cloze",
+      "fields": [
+        { "name": "文字", "role": "content", "spec": "一句完整的话，用 {{c1::…}} 挖掉要记的部分", "required": true },
+        { "name": "背面额外", "role": "memory", "spec": "记忆提示与出处：怎么背、在哪一页", "required": false }
+      ]
+    },
+    "quality": {
+      "rules": [
+        { "id": "cloze-open", "field": "文字", "kind": "startsWith", "value": "{{c1::" },
+        { "id": "cloze-close", "field": "文字", "kind": "endsWith", "value": "}}" }
+      ],
+      "rubric": "挖空处必须能从同一句的上下文推回去；不要只挖一个孤立名词"
+    },
+    "acceptance": { "criteria": "先做 2 张样卡确认粒度" },
+    "limits": ["Cloze 模型字段名随界面语言变化（中文为「文字/背面额外」），换语言环境需另建方案"],
+    "origin": { "kind": "seed", "note": "随包示例，任何 Anki 都有 Cloze 模型" }
+  }
+]

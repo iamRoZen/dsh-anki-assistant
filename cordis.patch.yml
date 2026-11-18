@@ -1,0 +1,4 @@
+- insert:
+    - id: anki-assistant
+      name: dsh-anki-assistant
+      config: {}

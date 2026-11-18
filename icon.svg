@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Anki Assistant">
+  <rect x="4" y="8" width="44" height="44" rx="8" fill="#1f6feb" opacity="0.25"/>
+  <rect x="12" y="14" width="44" height="44" rx="8" fill="#1f6feb"/>
+  <path d="M24 32h20M24 41h13" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="21" cy="24" r="2.6" fill="#8ec5ff"/>
+  <path d="M19.5 24.2l1.6 1.7 2.6-3" stroke="#0b1220" stroke-width="1.2" fill="none"/>
+</svg>
