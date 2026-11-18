@@ -38,9 +38,9 @@ async function mount() {
   return { ctx, tools, dataDir }
 }
 
-test('注册五个工具，名字稳定', async () => {
+test('注册六个工具，名字稳定', async () => {
   const { tools } = await mount()
-  assert.deepEqual([...tools.keys()].sort(), ['batch', 'card_write', 'materials', 'practice', 'scheme'])
+  assert.deepEqual([...tools.keys()].sort(), ['batch', 'card_preview', 'card_write', 'materials', 'practice', 'scheme'])
 })
 
 test('每个工具都有参数、输出 schema 与 render', async () => {

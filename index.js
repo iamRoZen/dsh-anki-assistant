@@ -5,6 +5,7 @@
  * 写进提示词。它不产出步骤序列——顺序由 Agent 决定。
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -19,6 +20,7 @@ import {
 } from './lib/batch.js'
 import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteError } from './lib/write.js'
 import { findLines, readMaterial } from './lib/materials.js'
+import { buildCardsHtml, openFile, splitFields } from './lib/preview.js'
 import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readPackageSchemeRecord, readSchemeBody, readTemplate, refreshSchemeAssets, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
 
@@ -413,6 +415,9 @@ export function apply(ctx, config = {}) {
         const keyField = scheme.output.fields[0].name
         const legacyValidator = legacyValidatorFor(scheme)
         const warnings = ankiUp ? [] : ['Anki 连不上：本次只跑了方案规则，没有查重']
+        if (!legacyValidator && (scheme.quality?.rules?.length ?? 0) === 0) {
+          warnings.push('本方案没有机器校验规则：写入前请人工逐张核对')
+        }
         let sourceNoted = false
         for (const item of batch.items) {
           if (item.status === 'written') continue
@@ -556,6 +561,7 @@ export function apply(ctx, config = {}) {
       batch: { type: 'string', description: 'plan/verify 时的批次 id' },
       plan: { type: 'string', description: 'commit/verify 时的计划 id' },
       mode: { type: 'string', enum: ['add', 'update'], description: 'plan 时：add 新建卡（默认），update 改已有卡（题上需有 noteId）' },
+      open: { type: 'boolean', description: 'commit 成功后用 Anki 浏览器打开刚写入的卡' },
     },
     output: {
       schema: {
@@ -595,6 +601,9 @@ export function apply(ctx, config = {}) {
         const lines = [
           `计划 ${plan.id}｜${plan.mode === 'update' ? '改卡' : '新增'}｜${plan.deck} / ${plan.model}｜可写 ${ready} 张，受阻 ${blocked.length} 张`,
         ]
+        if (!plan.legacy && (scheme.quality?.rules?.length ?? 0) === 0) {
+          lines.push('⚠ 本方案没有机器校验规则：请人工逐张核对后再 commit')
+        }
         if (plan.modelIssues.length) {
           for (const issue of plan.modelIssues) lines.push(`✗ ${issue.message}`)
         }
@@ -624,6 +633,17 @@ export function apply(ctx, config = {}) {
         await saveBatch(store.root, batch)
         const ok = outcomes.filter((entry) => entry.ok).length
         const lines = [`写入完成：成功 ${ok}，失败 ${outcomes.length - ok}`]
+        if (args.open) {
+          const ids = outcomes.filter((entry) => entry.ok).map((entry) => entry.noteId)
+          if (ids.length > 0) {
+            try {
+              await anki.guiBrowse(`nid:${ids.join(',')}`)
+              lines.push(`已在 Anki 浏览器中打开这 ${ids.length} 张卡`)
+            } catch (error) {
+              lines.push(`打开 Anki 浏览器失败：${error.message}`)
+            }
+          }
+        }
         for (const entry of outcomes.filter((entry) => !entry.ok)) {
           lines.push(`✗ ${entry.id}：${entry.error}`)
         }
@@ -650,6 +670,89 @@ export function apply(ctx, config = {}) {
       }
 
       throw new Error(`未知 action ${args.action}`)
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'card_preview',
+    description:
+      '把批次 / 计划 / 指定 noteId 的卡渲染成离线 HTML（正面、背面、模型自带 CSS），返回文件路径；'
+      + 'open=true 时用默认浏览器打开。只读 Anki，不写卡。',
+    parameters: {
+      batch: { type: 'string', description: '批次 id' },
+      plan: { type: 'string', description: '计划 id（缺批次时按其批次预览）' },
+      notes: { type: 'array', items: { type: 'integer' }, description: '指定 noteId，优先于批次' },
+      open: { type: 'boolean', description: '生成后用默认浏览器打开' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          file: { type: 'string' },
+          cards: { type: 'integer' },
+          text: { type: 'string' },
+        },
+      },
+      render(_args, value) {
+        return text(value.text)
+      },
+    },
+    async execute(args) {
+      await boot()
+      let fieldsList = []
+      let scheme = null
+      let model = null
+      let title = 'Anki 预览'
+
+      if (args.notes?.length) {
+        const info = (await anki.notesInfo(args.notes)) ?? []
+        const present = info.filter(Boolean)
+        for (const note of present) {
+          fieldsList.push(Object.fromEntries(
+            Object.entries(note.fields ?? {}).map(([name, value]) => [name, value?.value ?? '']),
+          ))
+        }
+        model = present[0]?.modelName ?? null
+        title = `预览 ${args.notes.length} 张`
+        if (present.length < args.notes.length) title += `（缺 ${args.notes.length - present.length} 张）`
+      } else {
+        const plan = args.plan ? await loadPlan(store.root, args.plan) : null
+        const batch = args.batch
+          ? await loadBatch(store.root, args.batch)
+          : (plan ? await loadBatch(store.root, plan.batchId) : null)
+        if (!batch) throw new Error('preview 需要 batch、plan 或 notes')
+        const ref = plan?.scheme ?? batch.scheme
+        scheme = await getScheme(store.root, ref.id, ref.version)
+        if (!scheme) throw new Error(`读不到方案 ${ref.id}@${ref.version}`)
+        model = plan?.model ?? batch.target.model
+        fieldsList = batch.items.map((item) => Object.fromEntries(
+          scheme.output.fields.map((field) => [field.name, item.fields?.[field.name] ?? '']),
+        ))
+        title = batch.title || batch.id
+      }
+
+      let css = ''
+      if (model) {
+        try {
+          css = (await anki.modelStyling(model))?.css ?? ''
+        } catch {
+          css = ''
+        }
+      }
+
+      const cards = fieldsList.map((fields) => splitFields(scheme, fields))
+      const html = buildCardsHtml({ cards, css, title })
+      const dir = join(store.root, 'previews')
+      await mkdir(dir, { recursive: true })
+      const file = join(dir, `preview-${Date.now().toString(36)}.html`)
+      await writeFile(file, html, 'utf8')
+      if (args.open) openFile(file)
+      return {
+        file,
+        cards: cards.length,
+        text: `已生成 ${cards.length} 张卡的预览：${file}${args.open ? '（已用浏览器打开）' : ''}`,
+      }
     },
   }))
 
