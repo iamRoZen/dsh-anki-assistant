@@ -811,15 +811,13 @@ export function apply(ctx, config = {}) {
     text: () => {
       const index = schemeIndexSync(settings.dataDir)
       return [
-        '## Anki Assistant',
-        '制卡四步：取原文 → 问题集 → 答案 → 卡片；记忆提示写进卡的 memory 字段。',
-        '单张卡或一次小改直接用工具做完；一批卡用 batch；要留可检查的中间文档或跨会话继续，才当项目推进。',
-        '动手前先 scheme list，选中后 scheme get 会带回完整正文——正文里的字段写法、检查标准、正反例就是权威规则。',
-        '想学某套方案实际怎么跑：practice list 按方案筛，practice get 读全文。',
-        '取原文按【小节标题】检索，返回的 p页:L行 直接写进定位字段。',
-        '批量写入前先 card_write plan，把预览给用户看；确认后再 commit，随后 verify 按提交快照回读。',
-        '改了草稿、方案版本或目标牌组，旧计划就作废，必须重新 plan。',
-        '用户从一次改卡里体现出新方法时，先记成 draft 方案并说明，经用户确认再 active。',
+        '## 工具与方案约定',
+        '可用工具：scheme（方案）、practice（实践）、batch（批次）、materials（资料与行号）、card_write（plan/commit/verify）、card_preview（离线渲染预览）。',
+        '方法是方案的事：动手前 scheme list，选中后 scheme get 会带回正文、卡片模板与用过的实践；方案没写的，不要自己发明统一标准。',
+        '资料定位用 materials，返回的 p页:L行 可直接写进定位字段。',
+        '写入先 card_write plan 给用户看，确认后 commit；commit 可 open=true 在 Anki 里打开，card_preview 可渲染正反面离线预览。',
+        '改了草稿、方案版本或目标，旧计划自动作废，需要重新 plan。',
+        '用户从一次操作里体现新方法时，先存成 draft 方案并说明，经确认再 active。',
         index.length ? `现有方案：\n${index.slice(0, 15).join('\n')}` : '现有方案：无（用 scheme save 建档）',
       ].join('\n')
     },
