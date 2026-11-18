@@ -7,7 +7,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
@@ -19,7 +19,7 @@ import {
 } from './lib/batch.js'
 import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteError } from './lib/write.js'
 import { findLines, readMaterial } from './lib/materials.js'
-import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readSchemeBody, readTemplate, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
+import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readPackageSchemeRecord, readSchemeBody, readTemplate, refreshSchemeAssets, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
 
 const PROVIDER = 'anki-assistant'
@@ -99,13 +99,48 @@ export function apply(ctx, config = {}) {
     ankiUrl: typeof config.ankiUrl === 'string' && config.ankiUrl
       ? config.ankiUrl
       : 'http://127.0.0.1:8765',
+    python: typeof config.python === 'string' && config.python
+      ? config.python
+      : (process.platform === 'win32' ? 'python -X utf8' : 'python3'),
+  }
+
+  /**
+   * 方案自带校验器：优先 quality.validator，兼容 quality.legacy；
+   * 只认方案目录里的 module（默认 validate.mjs）。插件不实现判据、也不内置 Python 调用。
+   */
+  function legacyValidatorFor(scheme) {
+    const validatorConfig = scheme?.quality?.validator ?? scheme?.quality?.legacy
+    if (!validatorConfig) return null
+    const moduleName = validatorConfig.module ?? 'validate.mjs'
+    const moduleFile = join(store.root, 'schemes', scheme.id, moduleName)
+    return async (fields) => {
+      if (!existsSync(moduleFile)) {
+        throw new Error(`旧判据缺失：方案 ${scheme.id} 没有 ${moduleName}`)
+      }
+      let mod
+      try {
+        mod = await import(pathToFileURL(moduleFile).href)
+      } catch (error) {
+        throw new Error(`旧判据未加载：${moduleFile}（${error.message}）`)
+      }
+      if (typeof mod.validate !== 'function') {
+        throw new Error(`旧判据无效：${moduleFile} 没有导出 validate(fields)`)
+      }
+      return mod.validate(fields, {
+        checks: validatorConfig.checks ?? null,
+        python: settings.python,
+      })
+    }
   }
 
   const store = createStore(settings.dataDir)
-  const anki = createAnki({
-    url: settings.ankiUrl,
-    auditFile: join(settings.dataDir, 'audit', 'anki.jsonl'),
-  })
+  // 测试注入点：给一个实现同样方法的对象即可，不必连真实 Anki。
+  const anki = config.ankiClient && typeof config.ankiClient.modelFields === 'function'
+    ? config.ankiClient
+    : createAnki({
+      url: settings.ankiUrl,
+      auditFile: join(settings.dataDir, 'audit', 'anki.jsonl'),
+    })
 
   let ready = null
   async function boot() {
@@ -116,13 +151,33 @@ export function apply(ctx, config = {}) {
         const added = await seedSchemes(store.root, seeds)
         seedLibrarySync(store.root, ASSETS)
         seedSchemeDirsSync(store.root, ASSETS)
-        // 目录式方案（自带 scheme.json）首次运行登记为 v1
+        // 目录式方案：首次登记 v1；随包 revision 更高时追加新版本。
+        // 不覆盖旧版本、不改绑已有批次（批次钉的是版本号）。
         for (const entry of readdirSync(new URL('./assets/schemes/', import.meta.url), { withFileTypes: true })) {
           if (!entry.isDirectory()) continue
-          if (await getScheme(store.root, entry.name)) continue
-          const record = readAssetSchemeJson(store.root, entry.name)
-          if (record) {
-            const saved = await saveScheme(store.root, { ...record, changeWhy: '归纳方案种子' })
+          // 读包内资产，不读数据目录里的旧副本——否则升级永远不会发生
+          const record = readPackageSchemeRecord(ASSETS, entry.name)
+          if (!record) continue
+          const stored = await getScheme(store.root, entry.name)
+          if (!stored) {
+            const saved = await saveScheme(store.root, { ...record, changeWhy: '归纳方案种子 v1' })
+            added.push(`${saved.id}@${saved.version}`)
+            continue
+          }
+          const storedRevision = Number(stored.revision ?? 0)
+          const assetRevision = Number(record.revision ?? 0)
+          if (assetRevision > storedRevision) {
+            const dir = join(store.root, 'schemes', entry.name)
+            const bodyFile = join(dir, 'body.md')
+            const oldSnapshot = join(dir, `body.v${stored.version}.md`)
+            // 先把旧正文按版本快照留住，再让包内新版覆盖 body.md
+            if (!existsSync(oldSnapshot) && existsSync(bodyFile)) copyFileSync(bodyFile, oldSnapshot)
+            refreshSchemeAssets(store.root, ASSETS, entry.name)
+            const saved = await saveScheme(store.root, {
+              ...record,
+              changeWhy: `随包判据升级：revision ${storedRevision} → ${assetRevision}；旧版本与旧正文保留，批次不自动改绑`,
+            })
+            if (existsSync(bodyFile)) copyFileSync(bodyFile, join(dir, `body.v${saved.version}.md`))
             added.push(`${saved.id}@${saved.version}`)
           }
         }
@@ -183,6 +238,10 @@ export function apply(ctx, config = {}) {
           }
           if (scheme.quality?.rules?.length) {
             lines.push(`规则：${scheme.quality.rules.map((rule) => rule.id).join('，')}`)
+          }
+          const validatorMeta = scheme.quality?.validator ?? scheme.quality?.legacy
+          if (validatorMeta) {
+            lines.push(`方案校验器：${validatorMeta.suite ?? 'custom'}（${(validatorMeta.checks ?? []).join('/')}），由方案目录 ${validatorMeta.module ?? 'validate.mjs'} 执行`)
           }
           if (scheme.quality?.rubric) lines.push(`人工判据：${scheme.quality.rubric}`)
           if (scheme.acceptance?.criteria) lines.push(`验收：${scheme.acceptance.criteria}`)
@@ -352,12 +411,31 @@ export function apply(ctx, config = {}) {
           ankiUp = false
         }
         const keyField = scheme.output.fields[0].name
+        const legacyValidator = legacyValidatorFor(scheme)
+        const warnings = ankiUp ? [] : ['Anki 连不上：本次只跑了方案规则，没有查重']
+        let sourceNoted = false
         for (const item of batch.items) {
           if (item.status === 'written') continue
           const fields = Object.fromEntries(
             scheme.output.fields.map((field) => [field.name, item.fields?.[field.name] ?? '']),
           )
           const issues = evaluate(fields, scheme.quality?.rules)
+          if (legacyValidator) {
+            let verdict
+            try {
+              verdict = await legacyValidator(fields)
+            } catch (error) {
+              // 检测器缺失/异常：明确失败，不退化成 JS 规则
+              throw new Error(`旧判据未执行（${scheme.id}@${scheme.version}）：${error.message}`)
+            }
+            for (const finding of verdict.issues ?? []) {
+              issues.push({ ruleId: `legacy:${finding.code}`, field: '答案', message: finding.message })
+            }
+            if (!sourceNoted && verdict.source?.status === 'unverified') {
+              warnings.push(`出处未核：${verdict.source.reason ?? '未配置 refdb'}`)
+              sourceNoted = true
+            }
+          }
           const key = String(fields[keyField] ?? '').trim()
           if (ankiUp && key) {
             const found = await anki.findNotes(`"${keyField}:${key}"`).catch(() => [])
@@ -372,7 +450,7 @@ export function apply(ctx, config = {}) {
         return {
           summary: summarize(batch),
           items: view(batch),
-          warnings: ankiUp ? [] : ['Anki 连不上：本次只跑了方案规则，没有查重'],
+          warnings,
         }
       }
 
@@ -505,7 +583,14 @@ export function apply(ctx, config = {}) {
         if (!batch) throw new Error(`没有批次 ${args.batch}`)
         const scheme = await getScheme(store.root, batch.scheme.id, batch.scheme.version)
         if (!scheme) throw new Error(`批次钉住的方案 ${batch.scheme.id}@${batch.scheme.version} 读不到`)
-        const { plan, blocked } = await buildPlan({ root: store.root, batch, scheme, anki, mode: args.mode ?? 'add' })
+        const { plan, blocked } = await buildPlan({
+          root: store.root,
+          batch,
+          scheme,
+          anki,
+          mode: args.mode ?? 'add',
+          validator: legacyValidatorFor(scheme),
+        })
         const ready = plan.items.filter((item) => item.status === 'ready').length
         const lines = [
           `计划 ${plan.id}｜${plan.mode === 'update' ? '改卡' : '新增'}｜${plan.deck} / ${plan.model}｜可写 ${ready} 张，受阻 ${blocked.length} 张`,
@@ -517,6 +602,13 @@ export function apply(ctx, config = {}) {
           const head = `${item.status === 'ready' ? '✓' : '✗'} ${item.id}`
           lines.push(`${head}：${item.key || '（空判重键）'}`)
           for (const issue of item.issues) lines.push(`   - ${issue.field}：${issue.message}`)
+        }
+        if (plan.legacy) {
+          const source = plan.legacySource
+          const sourceText = source?.status === 'unverified'
+            ? `未核（${source.reason ?? '未配置 refdb'}）`
+            : (source ? '已核' : '未知（适配器未返回出处状态）')
+          lines.push(`方案校验器 ${plan.legacy.suite ?? 'custom'}：${(plan.legacy.checks ?? []).join('/')}｜出处：${sourceText}`)
         }
         lines.push('确认无误后用 card_write commit plan=<id> 写入。')
         return { plan: plan.id, ready, blocked: blocked.length, text: lines.join('\n') }

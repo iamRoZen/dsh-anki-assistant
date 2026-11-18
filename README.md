@@ -24,8 +24,13 @@
 |---|---|---|
 | Anki + AnkiConnect | 写入必需 | 方案、批次、校验、预览仍可用；`commit` 与 `verify` 报错 |
 | `pdfjs-dist`（可选依赖） | 读 PDF 必需 | `.txt` / `.md` 仍可读；读 PDF 时提示安装或先转换 |
+| Python 3.10+ | 仅带旧判据的方案需要（如 `medical-qac-2026`） | 报「旧判据未执行」，不会退化成 JS 规则通过 |
 
-不需要 Python，不需要本机脚本，不依赖任何 MCP 配置。
+方案专用的判据随方案目录分发（`assets/schemes/<id>/vendor/`，原码 + `PROVENANCE.md`），
+插件只按 `quality.legacy.module` 加载方案自带的 `validate.mjs`；换掉这个方案，判据一起消失。
+配置 `python:` 可指定解释器，默认 Windows 用 `python -X utf8`。
+
+通用能力（方案、批次、资料读取、写入闸门）不需要 Python，也不需要本机脚本或 MCP 配置；只有**声明了旧判据的方案**（如 `medical-qac-2026`）需要 Python 3.10+ 来运行随包原实现。
 
 ## 配置
 

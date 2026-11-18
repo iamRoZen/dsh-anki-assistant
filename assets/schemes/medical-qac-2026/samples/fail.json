@@ -9,5 +9,5 @@
     "笔记": "",
     "引用": "药理学（第10版）, 人民卫生出版社 ‖ p120:L6-9"
   },
-  "expect": ["a-cloze", "a-ordinal", "meta-weight"]
+  "expect": ["CLOZE", "ORDINAL", "WEIGHT"]
 }

@@ -1,5 +1,6 @@
 {
   "id": "medical-qac-2026",
+  "revision": 2,
   "status": "draft",
   "deliverable": "cards",
   "title": "QAC 六字段·旧实践归纳版",
@@ -38,15 +39,15 @@
   "quality": {
     "rules": [
       { "id": "q-ask", "field": "问题", "kind": "endsWith", "value": "？" },
-      { "id": "a-cloze", "field": "答案", "kind": "clozeShape" },
-      { "id": "a-weight", "field": "答案", "kind": "weight", "value": 180 },
-      { "id": "a-ordinal", "field": "答案", "kind": "ordinal" },
-      { "id": "a-lines", "field": "答案", "kind": "lineLimit", "value": 25 },
-      { "id": "a-table", "field": "答案", "kind": "tableCells" },
-      { "id": "meta-weight", "field": "要点数", "kind": "weightOf", "sourceField": "答案" },
       { "id": "loc-form", "field": "章节定位", "kind": "matches", "value": "‖" },
       { "id": "cite-locator", "field": "引用", "kind": "matches", "value": "‖\\s*p\\d+:L?\\d+" }
     ],
+    "legacy": {
+      "suite": "medical_qac",
+      "module": "validate.mjs",
+      "checks": ["CLOZE", "ORDINAL", "LONGLINE", "NEEDNEXT", "TOOBIG", "WEIGHT"],
+      "note": "校验器由本方案目录自带（validate.mjs + vendor/），不属于插件通用层；出处核验需 refdb，未配置时只报「出处未核」，不算失败"
+    },
     "rubric": "分支名必须有出处；判根数（两个互不依赖的根就拆）；压缩不删层级/限定语/方向；记忆提示只写怎么背"
   },
   "acceptance": { "criteria": "先做 3 张样卡，逐条对照原文；样卡不过不批量" },

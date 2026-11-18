@@ -20,5 +20,16 @@
     "deliverable": "cards",
     "doc": "qac-exam.md",
     "tags": ["真题", "题库", "QAC"]
+  },
+  {
+    "id": "gaoshu-steps",
+    "title": "数学推导·一步一动作（同济高数）",
+    "whenToUse": "定理、公式、推导：答案拆 ol/li 一步一动作，问题写成有主语的名词短语",
+    "modules": ["资料整理", "撰写答案", "制作卡片", "记忆指导"],
+    "model": "QAC 问答挖空 v4（国标引用）",
+    "template": "qac-v4",
+    "deliverable": "cards",
+    "doc": "gaoshu-steps/body.md",
+    "tags": ["数学", "高等数学", "推导", "ol-li"]
   }
 ]

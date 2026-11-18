@@ -1,26 +1,37 @@
 # 检查项对照：本方案 ↔ 旧 check.py
 
-| 本方案规则 | 旧检查码 | 对齐情况 |
+**执行方式**：六项结构判据由**本方案目录自带**的 Python 原实现执行
+（`validate.mjs` → `vendor/legacy_adapter.py` → `vendor/legacy_qac.py` + `vendor/tools/`），
+插件只通过 `quality.legacy.module` 加载它。没有 JS 复刻，也没有「JS 兜底」；
+删掉本方案目录，插件不知道 Python 的存在。
+
+| 检查码 | 旧实现位置 | 说明 |
 |---|---|---|
-| `a-cloze` | `CLOZE`（`cloze_issues`） | 一致：开头、结尾、`}}` 后尾巴三项 |
-| `a-ordinal` | `ORDINAL`（`ordinal_issues`） | 一致：重复、父号缺失、同级缺号 |
-| `a-lines` | `LONGLINE`（`visual_lines` + 25） | 一致：按序号行与 `<li>` 分别计，表格免检 |
-| `a-table` | `NEEDNEXTL`（`needs_next_leaf`） | 基本一致：≥3 项 + 择一标记 + 无 `<br>`/`<li>`；旧脚本还有"格内字当量 ≤4 时继续"的分支，本实现未复制，属已知差异 |
-| `a-weight` | `TOOBIG`（180 硬上限） | 一致 |
-| `meta-weight` | `WEIGHT`（字段值与实算不符） | 一致（字当量口径经 8 例 parity 验证） |
-| `loc-form` / `cite-locator` | `REF`（定位串 + 覆盖率） | 部分：只查格式，不查原文覆盖率；覆盖率需要 refdb |
-| — | `NOBOLD`（二级叶子无标注） | **未实现**：依赖"哪些是二级叶子"的语义判断，暂留人工 |
-| — | `WEAKMARK`（标了行首主语） | **未实现**：同上 |
-| — | `MATH` | **未实现**：数学卡才需要，本方案不覆盖 |
-| — | `FAMILY`（前 6 字撞名） | **未实现**：需要跨卡查询，留给批次判重 |
+| `CLOZE` | `tools/structure.py` `cloze_issues` | 开头、结尾、`}}` 后尾巴 |
+| `ORDINAL` | `check.py` `ordinal_issues` | 重复、父号缺失、同级缺号 |
+| `LONGLINE` | `check.py` `visual_lines` + `long_lines` | 按序号行与 `<li>` 分别算，表格免检 |
+| `NEEDNEXT` | `check.py` `needs_next_leaf` | 表格格内 ≥3 项 + 择一标记，且无 `<br>`/`<li>` |
+| `TOOBIG` | `check.py` `WEIGHT_SOFT_LIMIT` + `tools/measure.py` `weigh` | 字当量 > 180 |
+| `WEIGHT` | 同上 + 字段 `要点数` | 字段值与字当量不符 |
 
-## 已知差异（不隐藏）
+## 与本插件格式规则的分工
 
-1. `a-table` 少了旧脚本"格内字当量 ≤4 继续"的分支，可能少报极短格。
-2. 覆盖率检查（`REF` 的 n-gram 部分）未接入，因为需要教材库；没有 refdb 时旧脚本也会跳过。
-3. 旧脚本按 `fmt::v3` 标签决定是否跑序号检查；本方案按方案本身决定，不看标签。
+| 规则 | 谁执行 | 为什么 |
+|---|---|---|
+| `q-ask`、`loc-form`、`cite-locator` | 插件 JS | 纯字符串格式，与旧判据无关 |
+| 上述六项 | 随包 Python 原实现 | 旧口径复杂（字当量含公式起价、序号块首锚定），复刻必然漂移 |
 
-## 未覆盖的旧检查为什么没做
+## 未接入的旧检查（明确不做，不静默跳过）
 
-`NOBOLD`/`WEAKMARK` 需要判断"这一行是不是二级叶子""标的是不是主语"，属于语义；硬做会误报，
-方案里用 rubric 交给人工。下一版若要自动化，得先有"叶子地址"的结构化数据，而不是从 HTML 反推。
+| 检查码 | 原因 |
+|---|---|
+| `REF`（覆盖率） | 需要 refdb 教材库；未配置时旧脚本也会跳过。本方案只报「出处未核」 |
+| `NOBOLD` / `WEAKMARK` | 需要判断"是否二级叶子""标的是否主语"，属语义；放进 rubric 由人工判 |
+| `MATH` | 数学卡才需要；本方案不覆盖 |
+| `FAMILY` | 需要跨卡查询；判重已由批次与 Anki 全局标签承担 |
+
+## 出处状态
+
+适配器固定返回 `source.status = "unverified"`（未配置 refdb）。
+`batch validate` 会把它作为 `warnings` 带出；`card_write plan` 会在预览里显示「出处：未核」。
+结构通过 ≠ 出处已核，两者在输出里分开。

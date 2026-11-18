@@ -1,0 +1,63 @@
+{
+  "id": "gaoshu-steps",
+  "revision": 1,
+  "status": "draft",
+  "deliverable": "cards",
+  "title": "数学推导·一步一动作（同济高数）",
+  "appliesTo": {
+    "cardTypes": ["定理与公式", "推导"],
+    "subjects": ["高等数学"],
+    "materials": ["教材"]
+  },
+  "inputs": [
+    { "kind": "textbook", "required": true, "note": "能按节标题回读页与行" }
+  ],
+  "methods": [
+    { "stage": "collect", "how": "按【节标题】取定理/公式原文，记页行；不按概念词搜", "produces": "原文与页行" },
+    { "stage": "organize", "how": "先判这张卡回忆的是结论还是推导：结论卡=条件+结论；推导卡=一步一动作", "produces": "卡片形态" },
+    { "stage": "solve", "how": "答案拆成 <ol><li>，条件与公式都留在 c1 内，不往正面搬", "produces": "条目化答案" },
+    { "stage": "make", "how": "按模板填字段；公式用 \\(…\\) 或 \\[…\\]；证明卡打 ai::derive 标签", "produces": "卡" }
+  ],
+  "output": {
+    "model": "QAC 问答挖空 v4（国标引用）",
+    "template": "qac-v4",
+    "fields": [
+      { "name": "问题", "role": "content", "spec": "有主语、能独立看懂的名词短语；不用自反性问句，不以「？」结尾；不写「部分和」这类秃名词", "required": true },
+      { "name": "章节定位", "role": "locator", "spec": "书名 ‖ 章 ‖ 节，全角 ‖", "required": true },
+      { "name": "要点数", "role": "meta", "spec": "字当量仍按旧脚本口径；数学卡豁免 180，本方案未接管，可留空", "required": false },
+      { "name": "答案", "role": "content", "spec": "整段 {{c1::…}}；内容拆 <ol><li>，一条一个动作；公式用 \\(…\\) 或 \\[…\\]", "required": true },
+      { "name": "笔记", "role": "memory", "spec": "记忆提示：条件之间怎么串，不复述答案", "required": false },
+      { "name": "引用", "role": "locator", "spec": "书目 + ‖ p页:L起-止", "required": true }
+    ]
+  },
+  "presentation": {
+    "forms": ["ol-steps"],
+    "chooseBy": "本方案只有一种形态：<ol><li> 条目化；结论卡也按条目写条件与结论"
+  },
+  "quality": {
+    "validator": {
+      "suite": "gaoshu-steps",
+      "module": "validate.mjs",
+      "checks": ["CLOZE", "MATH_DELIM", "MATH_ANGLE", "MATH_BRACE", "STEPS", "PROBLEM_FORM", "MD"],
+      "note": "校验器由本方案目录自带（纯 JS，不依赖 Python）；未接管字当量与出处覆盖率"
+    },
+    "rules": [
+      { "id": "q-required", "field": "问题", "kind": "required" },
+      { "id": "cite-required", "field": "引用", "kind": "required" },
+      { "id": "cite-locator", "field": "引用", "kind": "matches", "value": "‖\\s*p\\d+:L?\\d+" }
+    ],
+    "rubric": "条件与限定语不得省略；一步只做一次变形；公式左端与条件放在 c1 内，不搬到正面"
+  },
+  "acceptance": {
+    "criteria": "先做 2–3 张（一张结论卡、一张推导卡）确认条目粒度；样卡不过不批量"
+  },
+  "limits": [
+    "未接管字当量与 180 上限（旧脚本对数学卡豁免）",
+    "未接管出处覆盖率核验",
+    "只覆盖同济《高等数学》下册实践；上册未验证"
+  ],
+  "origin": {
+    "kind": "induced",
+    "ref": "会话 22bd9fc9-c7ee-4a0a-b9c7-c3961ac0353e：同济高数第八版下册，36 节 371 张"
+  }
+}
