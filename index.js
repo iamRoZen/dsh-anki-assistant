@@ -19,7 +19,7 @@ import {
 } from './lib/batch.js'
 import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteError } from './lib/write.js'
 import { findLines, readMaterial } from './lib/materials.js'
-import { getPracticeSync, listPracticesSync, practicesForScheme, readSchemeBody, schemeBodyPath, seedLibrarySync } from './lib/library.js'
+import { getPracticeSync, listPracticesSync, practicesForScheme, readSchemeBody, readTemplate, schemeBodyPath, seedLibrarySync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
 
 const PROVIDER = 'anki-assistant'
@@ -179,6 +179,9 @@ export function apply(ctx, config = {}) {
           if (value.scheme.body) {
             lines.push('', '--- 方案正文 ---', String(value.scheme.body).slice(0, 12000))
           }
+          if (value.scheme.templateBody) {
+            lines.push('', '--- 卡片模板 ---', String(value.scheme.templateBody).slice(0, 8000))
+          }
           return text(lines.join('\n'))
         }
         return text((value.schemes ?? [])
@@ -201,6 +204,7 @@ export function apply(ctx, config = {}) {
             ...scheme,
             body,
             bodyPath: schemeBodyPath(store.root, scheme.id),
+            templateBody: readTemplate(store.root, scheme.output?.template),
             practices: practicesForScheme(store.root, scheme.id),
           },
         }

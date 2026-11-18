@@ -2,87 +2,123 @@
   {
     "id": "qac-memory",
     "status": "active",
-    "title": "问答挖空·带记忆提示",
+    "deliverable": "cards",
+    "title": "教材驱动·概念关系出题",
     "appliesTo": {
       "cardTypes": ["名词解释", "机制类主观题", "要点型问答"],
-      "subjects": ["内科学", "外科学", "药理学", "病理学"],
+      "subjects": ["医学", "生物", "法律", "任意有明确章节结构的教材"],
       "materials": ["教材", "讲义"]
     },
     "inputs": [
-      { "kind": "textbook", "required": true, "note": "能回读到页与行" },
-      { "kind": "question", "required": false, "note": "真题或题库题干；留空则自拟" }
+      { "kind": "textbook", "required": true, "note": "有目录层级与小节标题" }
     ],
     "methods": [
-      { "stage": "collect", "how": "按【小节标题】在资料里检索，不用概念词过滤；取到能回答题干的那几行，记下页码与行号", "produces": "页行定位" },
-      { "stage": "solve", "how": "逐句对齐原文列可判分点；限定语、方向、阈值不得改写", "produces": "答案骨架与逐条依据" },
-      { "stage": "make", "how": "先把骨架写成编号行，再压缩到考场长度；最后写记忆提示", "produces": "字段齐全的草稿" },
-      { "stage": "advise", "how": "写下这张卡的回忆路径：先想什么、再想什么、哪里最容易漏", "produces": "记忆提示字段" }
+      { "stage": "collect", "how": "先看目录与本节小节标题，把内容归成几组关系；不先逐段读正文", "produces": "关系分组" },
+      { "stage": "organize", "how": "一组关系出一道题；不把一个关系切成碎片", "produces": "按关系分组的问题" },
+      { "stage": "solve", "how": "回到对应小节取原文，按原文编号写成树", "produces": "带依据的答案" },
+      { "stage": "make", "how": "按模板填字段；形式按内容结构选序号树或表格", "produces": "卡" }
     ],
     "output": {
       "model": "QAC 问答挖空 v4（国标引用）",
+      "template": "qac-v4",
       "fields": [
-        { "name": "问题", "role": "content", "spec": "单独可读、只问一条线索、以「？」结尾；不写选项，不出现答案里的词", "required": true },
-        { "name": "章节定位", "role": "locator", "spec": "书名 ‖ 篇 ‖ 章 ‖ 节；与资料的目录层级一致", "required": true },
-        { "name": "要点数", "role": "meta", "spec": "答案去掉 HTML 标签与挖空标记后的可见字符数，写成 N字；不估", "required": true },
-        { "name": "答案", "role": "content", "spec": "整段包在 {{c1:: … }} 里；序号用 <b>1.</b> / <b>1.1</b> 放段首；单行不超过 25 字", "required": true },
-        { "name": "笔记", "role": "memory", "spec": "记忆提示：这张卡怎么背（回忆起点、递推关系、最容易漏的一步），两行以内；不是答案的复述", "required": false },
-        { "name": "引用", "role": "locator", "spec": "书目 + ‖ p页:L起-止；定位必须能回读到原文", "required": false }
+        { "name": "问题", "role": "content", "spec": "单独可读、只问一条线索、以「？」结尾", "required": true },
+        { "name": "章节定位", "role": "locator", "spec": "书名 ‖ 章 ‖ 节，与目录层级一致", "required": true },
+        { "name": "要点数", "role": "meta", "spec": "答案去标签后的可见字数，写 N字", "required": true },
+        { "name": "答案", "role": "content", "spec": "整段 {{c1:: … }}；序号 <b>1.</b> 段首", "required": true },
+        { "name": "笔记", "role": "memory", "spec": "记忆提示：怎么背，不复述答案", "required": false },
+        { "name": "引用", "role": "locator", "spec": "书目 + ‖ p页:L起-止", "required": false }
       ]
+    },
+    "presentation": {
+      "forms": ["outline", "table"],
+      "chooseBy": "并列或分层用序号树；同一维度上的行列对照用表格"
     },
     "quality": {
       "rules": [
         { "id": "q-ask", "field": "问题", "kind": "endsWith", "value": "？" },
-        { "id": "a-cloze-open", "field": "答案", "kind": "startsWith", "value": "{{c1::" },
-        { "id": "a-cloze-close", "field": "答案", "kind": "endsWith", "value": "}}" },
+        { "id": "a-open", "field": "答案", "kind": "startsWith", "value": "{{c1::" },
+        { "id": "a-close", "field": "答案", "kind": "endsWith", "value": "}}" },
         { "id": "a-length", "field": "答案", "kind": "maxLength", "value": 220 },
         { "id": "a-no-markdown", "field": "答案", "kind": "forbids", "value": "\\*\\*" },
-        { "id": "locate-required", "field": "章节定位", "kind": "required" },
         { "id": "meta-length", "field": "要点数", "kind": "lengthOf", "sourceField": "答案" }
       ],
-      "rubric": "逐点核对原文；分支名必须来自原文标题；压缩不能删层级、限定语、方向；记忆提示只写怎么背，不复述答案"
+      "rubric": "分支名来自原文标题；问题与答案问的是同一件事；定位能回查"
     },
-    "acceptance": {
-      "criteria": "先做 2–3 张样卡给用户看，确认字段写法与压缩尺度后再批量"
-    },
-    "limits": [
-      "笔记模型需已存在于 Anki；换模型要另建方案",
-      "模型字段顺序决定判重键，方案首字段必须是模型首字段"
-    ],
-    "origin": { "kind": "seed", "note": "随包示例，按本机已有的 QAC 模型写" }
+    "acceptance": { "criteria": "先做 2–3 张样卡确认写法与尺度" },
+    "limits": ["依赖目标模型已存在；含上下标的 PDF 行定位需人工核对"],
+    "origin": { "kind": "seed", "note": "教材驱动示例" }
   },
   {
-    "id": "cloze-memory",
+    "id": "qac-exam",
     "status": "active",
-    "title": "通用挖空·最小可用",
+    "deliverable": "cards",
+    "title": "题源驱动·逐题取证",
     "appliesTo": {
-      "cardTypes": ["单点记忆", "定义", "数值与阈值"],
-      "subjects": ["任意"],
-      "materials": ["教材", "讲义", "网页"]
+      "cardTypes": ["真题解析", "题库点"],
+      "subjects": ["医学", "法学", "资格考试", "任意有题库的科目"],
+      "materials": ["真题", "题库", "习题集"]
     },
     "inputs": [
-      { "kind": "textbook", "required": true, "note": "任何可读资料" }
+      { "kind": "question", "required": true, "note": "原题，含选项与题源" },
+      { "kind": "textbook", "required": true, "note": "用于逐题找依据" }
     ],
     "methods": [
-      { "stage": "collect", "how": "找到讲这件事的那一段，记下页码与行号", "produces": "页行定位" },
-      { "stage": "make", "how": "把要记的那一句写成挖空；上下文留在同一句里，避免只剩孤立词", "produces": "挖空文本" },
-      { "stage": "advise", "how": "在「背面额外」里写一句回忆抓手：先想起什么才能想起它，附页码", "produces": "记忆提示" }
+      { "stage": "organize", "how": "先把题目原样列出，保留选项、题号、题源；题干不改写", "produces": "题目清单" },
+      { "stage": "collect", "how": "逐题按题干里的小节标题词定位，不按概念词；取到能回答这道题的行", "produces": "每题依据" },
+      { "stage": "solve", "how": "只回答这道题问的事；选项题保留正确选项的原文表述", "produces": "逐题答案" },
+      { "stage": "make", "how": "按模板填字段；题源写进引用", "produces": "卡" }
     ],
     "output": {
-      "model": "Cloze",
+      "model": "QAC 问答挖空 v4（国标引用）",
+      "template": "qac-v4",
       "fields": [
-        { "name": "文字", "role": "content", "spec": "一句完整的话，用 {{c1::…}} 挖掉要记的部分", "required": true },
-        { "name": "背面额外", "role": "memory", "spec": "记忆提示与出处：怎么背、在哪一页", "required": false }
+        { "name": "问题", "role": "content", "spec": "照抄题干（可精简为问句），保留题号信息在引用里", "required": true },
+        { "name": "章节定位", "role": "locator", "spec": "依据所在章节", "required": true },
+        { "name": "要点数", "role": "meta", "spec": "答案去标签后的可见字数，写 N字", "required": true },
+        { "name": "答案", "role": "content", "spec": "只答这道题；整段 {{c1:: … }}", "required": true },
+        { "name": "笔记", "role": "memory", "spec": "这道题最易错的一点", "required": false },
+        { "name": "引用", "role": "locator", "spec": "题源（题号/出处）+ 书目 + ‖ p页:L起-止", "required": true }
       ]
     },
+    "presentation": { "forms": ["outline", "table"], "chooseBy": "按选项/对比关系决定：选项并列用表格，单点用序号树" },
     "quality": {
       "rules": [
-        { "id": "cloze-open", "field": "文字", "kind": "startsWith", "value": "{{c1::" },
-        { "id": "cloze-close", "field": "文字", "kind": "endsWith", "value": "}}" }
+        { "id": "q-ask", "field": "问题", "kind": "endsWith", "value": "？" },
+        { "id": "a-open", "field": "答案", "kind": "startsWith", "value": "{{c1::" },
+        { "id": "a-close", "field": "答案", "kind": "endsWith", "value": "}}" },
+        { "id": "meta-length", "field": "要点数", "kind": "lengthOf", "sourceField": "答案" },
+        { "id": "cite-required", "field": "引用", "kind": "required" },
+        { "id": "cite-locator", "field": "引用", "kind": "matches", "value": "‖\\s*p\\d+:" }
       ],
-      "rubric": "挖空处必须能从同一句的上下文推回去；不要只挖一个孤立名词"
+      "rubric": "题面与原文问的是同一件事；选项与题源完整；依据能回查"
     },
-    "acceptance": { "criteria": "先做 2 张样卡确认粒度" },
-    "limits": ["Cloze 模型字段名随界面语言变化（中文为「文字/背面额外」），换语言环境需另建方案"],
-    "origin": { "kind": "seed", "note": "随包示例，任何 Anki 都有 Cloze 模型" }
+    "acceptance": { "criteria": "先跑一道题，确认题源与依据对得上" },
+    "limits": ["题干本身有争议时须停下问用户"],
+    "origin": { "kind": "seed", "note": "题源驱动示例" }
+  },
+  {
+    "id": "question-set",
+    "status": "active",
+    "deliverable": "question-set",
+    "title": "只交问题集（不出卡）",
+    "appliesTo": {
+      "cardTypes": ["复习清单", "题库初稿"],
+      "subjects": ["任意"],
+      "materials": ["讲义", "题库", "大纲"]
+    },
+    "inputs": [{ "kind": "material", "required": true, "note": "要覆盖的范围" }],
+    "methods": [
+      { "stage": "organize", "how": "按覆盖范围逐条出题，记录 id、题干、题型、来源", "produces": "问题集" }
+    ],
+    "output": { "model": "", "fields": [] },
+    "presentation": { "forms": ["table", "list"], "chooseBy": "默认表格；用户要列表就列表" },
+    "quality": {
+      "rules": [],
+      "rubric": "每题有稳定 id 与可回查来源；有原题照抄；自拟题标明；复合问题拆开"
+    },
+    "acceptance": { "criteria": "抽三条核对来源可回查" },
+    "limits": ["不写入 Anki，也不需要笔记模型"],
+    "origin": { "kind": "seed", "note": "不出卡示例" }
   }
 ]
