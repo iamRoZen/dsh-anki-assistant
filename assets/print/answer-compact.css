@@ -1,0 +1,24 @@
+/* 示例：只看背面的打印样式（配合 pdfStyle=answer）。
+ * 用法：card_preview batch=... pdf=true pdfStyle=answer pdfCss=answer-compact.css
+ * 也可以把同名文件放到方案目录的 print.css，方案自带样式会自动生效。 */
+
+@page { size: A4; margin: 12mm; }
+
+.sheet {
+  page-break-after: auto;   /* 不强制一张一页，尽量排满 */
+  margin: 0 0 10mm;
+}
+
+.sheet .pane-sep { display: none; }
+
+.sheet .card {
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 0;
+}
+
+/* 背面里的引用压到最小，省纸 */
+.sheet .card .field[data-field="引用"] {
+  font-size: 10px;
+  color: #888;
+}

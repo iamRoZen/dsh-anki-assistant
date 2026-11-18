@@ -1,0 +1,14 @@
+/* 示例：问答同页、衬线字、行距略松（配合 pdfStyle=qa）。 */
+
+@page { size: A4; margin: 16mm; }
+
+.sheet .card {
+  font-family: Georgia, "Songti SC", "SimSun", serif;
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+
+.sheet .pane-sep {
+  border-top: 1px dashed #999;
+  margin: 14mm 0;
+}

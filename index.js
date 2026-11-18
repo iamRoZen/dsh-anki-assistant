@@ -696,6 +696,8 @@ export function apply(ctx, config = {}) {
       split: { type: 'boolean', description: '逐张另存 PNG，便于单张放大看（每张一次无头渲染，较慢）' },
       pdf: { type: 'boolean', description: '另出一份 A4 PDF，一张卡一页（正面、背面）' },
       measure: { type: 'boolean', description: '量横向溢出并回报（png 时默认开启）' },
+      pdfStyle: { type: 'string', enum: ['qa', 'question', 'answer'], description: 'PDF 版式：qa 正反同页（默认）、question 只看正面、answer 只看背面' },
+      pdfCss: { type: 'string', description: '自定义打印 CSS：文件路径，或 assets/print 下的文件名' },
       open: { type: 'boolean', description: '生成后用默认浏览器打开' },
     },
     output: {
@@ -828,7 +830,28 @@ export function apply(ctx, config = {}) {
       }
 
       let pdfFile = null
+      let pdfNote = ''
       if (args.pdf) {
+        const schemePrint = scheme?.output?.print ?? {}
+        const layout = args.pdfStyle ?? schemePrint.style ?? 'qa'
+        let cssPath = args.pdfCss ?? schemePrint.css
+        if (!cssPath && scheme) {
+          const own = join(store.root, 'schemes', scheme.id, 'print.css')
+          if (existsSync(own)) cssPath = own
+        }
+        let extraCss = ''
+        if (cssPath) {
+          const candidates = existsSync(cssPath)
+            ? [cssPath]
+            : [join(ASSETS, 'print', cssPath), join(store.root, 'print', cssPath)]
+          const found = candidates.find((path) => existsSync(path))
+          if (found) {
+            extraCss = readFileSync(found, 'utf8')
+            pdfNote = `；打印样式 ${found.split(/[\\/]/).pop()}`
+          } else {
+            pdfNote = `；打印样式未找到：${cssPath}`
+          }
+        }
         const printHtml = join(dir, `print-${stamp}.html`)
         await writeFile(printHtml, buildPrintHtml({
           cards,
@@ -836,9 +859,12 @@ export function apply(ctx, config = {}) {
           title: `${title}（打印版）`,
           ankiBase: useBase,
           mathjax: useMath,
+          layout,
+          extraCss,
         }), 'utf8')
         pdfFile = await renderPdf(printHtml, join(dir, `print-${stamp}.pdf`), edgeOptions)
         if (pdfFile) files.push(pdfFile)
+        pdfNote = `；版式 ${layout}${pdfNote}`
       }
 
       let layoutNote = ''
@@ -861,7 +887,7 @@ export function apply(ctx, config = {}) {
         ...(pngFile ? { png: pngFile } : {}),
         ...(files.length ? { files } : {}),
         cards: cards.length,
-        text: `已生成 ${cards.length} 张卡的预览：${file}${pngNote}${layoutNote}${extraNote}${args.open ? '（已用浏览器打开）' : ''}`,
+        text: `已生成 ${cards.length} 张卡的预览：${file}${pngNote}${layoutNote}${pdfNote}${extraNote}${args.open ? '（已用浏览器打开）' : ''}`,
       }
     },
   }))

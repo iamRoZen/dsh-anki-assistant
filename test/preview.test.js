@@ -97,7 +97,16 @@ test('打印版：一张卡一页，含 A4 分页与正反面', () => {
   const cards = [{ frontHtml: '正面一', backHtml: '背面一' }, { frontHtml: '正面二', backHtml: '背面二' }]
   const html = buildPrintHtml({ cards, title: '打印' })
   assert.match(html, /@page \{ size: A4/)
-  assert.equal((html.match(/class="sheet"/g) ?? []).length, 2)
+  assert.equal((html.match(/class="sheet/g) ?? []).length, 2)
   assert.match(html, /正面一/)
   assert.match(html, /背面二/)
+})
+
+test('打印版式：answer 只看背面，question 只看正面，可叠加自定义 CSS', () => {
+  const cards = [{ frontHtml: '正面X', backHtml: '背面Y' }]
+  const answer = buildPrintHtml({ cards, layout: 'answer', extraCss: '.x{color:red}' })
+  assert.match(answer, /pane-front \{ display: none/)
+  assert.match(answer, /\.x\{color:red\}/)
+  const question = buildPrintHtml({ cards, layout: 'question' })
+  assert.match(question, /pane-back \{ display: none/)
 })
