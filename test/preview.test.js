@@ -70,3 +70,10 @@ test('缺字段不炸：空字段跳过', () => {
   const { front } = splitFields(scheme, { 问题: '只有问题' })
   assert.equal(front.length, 1)
 })
+
+test('默认加载 MathJax，mathjax=false 可关闭', () => {
+  const split = splitFields(scheme, fields)
+  const cards = [{ frontHtml: fieldsToHtml(split.front), backHtml: fieldsToHtml(split.back) }]
+  assert.match(buildCardsHtml({ cards }), /mathjax@3/)
+  assert.doesNotMatch(buildCardsHtml({ cards, mathjax: false }), /mathjax@3/)
+})

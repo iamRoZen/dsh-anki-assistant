@@ -683,7 +683,7 @@ export function apply(ctx, config = {}) {
       plan: { type: 'string', description: '计划 id（缺批次时按其批次预览）' },
       notes: { type: 'array', items: { type: 'integer' }, description: '指定 noteId，优先于批次' },
       png: { type: 'boolean', description: '再截一张 PNG（用本机 Edge 无头渲染；没有 Edge 时只出 HTML）' },
-      mathjax: { type: 'boolean', description: '加载 MathJax（需要联网；出图时等待公式排版）' },
+      mathjax: { type: 'boolean', description: '加载 MathJax 排版公式（默认开；mathjax=false 关闭）' },
       open: { type: 'boolean', description: '生成后用默认浏览器打开' },
     },
     output: {
@@ -762,7 +762,7 @@ export function apply(ctx, config = {}) {
         return { frontHtml: fieldsToHtml(split.front), backHtml: fieldsToHtml(split.back) }
       })
 
-      const html = buildCardsHtml({ cards, css, title, mathjax: Boolean(args.mathjax) })
+      const html = buildCardsHtml({ cards, css, title, mathjax: args.mathjax !== false })
       const dir = join(store.root, 'previews')
       await mkdir(dir, { recursive: true })
       const stamp = Date.now().toString(36)
@@ -773,7 +773,10 @@ export function apply(ctx, config = {}) {
       let pngNote = ''
       if (args.png) {
         pngFile = await renderPng(file, join(dir, `preview-${stamp}.png`), {
-          virtualTimeBudget: args.mathjax ? 8000 : 0,
+          width: 1100,
+          height: Math.min(300 + cards.length * 700, 16000),
+          timeoutMs: args.mathjax === false ? 20000 : 60000,
+          virtualTimeBudget: args.mathjax === false ? 0 : 15000,
         })
         pngNote = pngFile ? `；PNG：${pngFile}` : '；PNG 未生成（没找到 Edge 或渲染超时）'
       }
