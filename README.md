@@ -14,9 +14,9 @@
 
 ## 截图
 
-![结构与模拟工作流](docs/images/explainer.png)
+![结构与模拟工作流](screenshots/explainer.png)
 
-![真实卡面：正面问题与挖空、背面分条答案与引用](docs/images/cards.png)
+![真实卡面：正面问题与挖空、背面分条答案与引用](screenshots/cards.png)
 
 ## 目录
 
