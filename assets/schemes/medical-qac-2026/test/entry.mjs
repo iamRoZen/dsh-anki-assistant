@@ -1,4 +1,4 @@
-/**
+﻿/**
  * medical-qac-2026 的入口级测试：真实调用 batch validate 与 card_write plan，
  * 用临时数据 + 模拟 Anki，不连真实库、不写 Anki。
  *
@@ -8,7 +8,14 @@
  * 依赖：Python 3.10+（或 ANKI_ASSISTANT_PYTHON）。
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { mkdtemp, readFile } from 'node:fs/promises'
+
+const tempDirs = []
+function trackDir(dir) { tempDirs.push(dir); return dir }
+process.once('exit', () => {
+  for (const dir of tempDirs) { try { rmSync(dir, { recursive: true, force: true }) } catch { /* 被占用就留给系统 */ } }
+})
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -55,7 +62,7 @@ function legacyCodes(issues = []) {
 }
 
 async function mount({ python } = {}) {
-  const dataDir = await mkdtemp(join(tmpdir(), 'anki-as-entry-'))
+  const dataDir = trackDir(await mkdtemp(join(tmpdir(), 'anki-as-entry-')))
   const { ctx, tools } = fakeContext()
   apply(ctx, {
     dataDir,
@@ -144,7 +151,7 @@ export async function runUpgradeTest() {
   const { loadBatch, createBatch, upsertItems, saveBatch } = await load('lib/batch.js')
   const { readSchemeBody } = await load('lib/library.js')
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'anki-as-upgrade-'))
+  const dataDir = trackDir(await mkdtemp(join(tmpdir(), 'anki-as-upgrade-')))
   const oldRecord = JSON.parse(JSON.stringify(schemeRecord))
   delete oldRecord.revision
   oldRecord.status = 'active'

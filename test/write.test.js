@@ -1,6 +1,6 @@
-import test from 'node:test'
+﻿import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp } from 'node:fs/promises'
+import { tempDir } from './temp.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -81,7 +81,7 @@ function fakeAnki({ fields = ['问题', '答案'], existing = [], failChunk = fa
 }
 
 async function setup({ items, schemeNow = scheme } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'anki-as-write-'))
+  const root = await tempDir('anki-as-write-')
   const store = createStore(root)
   await store.init()
   // 计划校验会回读方案，测试里也要真的落盘一份。

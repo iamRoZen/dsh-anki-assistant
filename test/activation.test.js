@@ -1,11 +1,11 @@
-/**
+﻿/**
  * 激活测试：不启动 DSH，直接 apply 一遍，确认四个工具、skill 与提示词段都注册成功。
  * 依赖本地 node_modules 里的 dsh-tools 形状桩（不进发布包）。
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { mkdtemp } from 'node:fs/promises'
+import { writeFileSync } from 'node:fs'
+import { tempDir, tempDirSync } from './temp.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -34,7 +34,7 @@ async function mount() {
       },
     },
   }
-  const dataDir = await mkdtemp(join(tmpdir(), 'anki-as-activation-'))
+  const dataDir = await tempDir('anki-as-activation-')
   apply(ctx, { dataDir })
   return { ctx, tools, dataDir }
 }
@@ -157,7 +157,7 @@ test('scheme test 用方案自带的 validate.mjs 跑样本', async () => {
 
 test('scheme import 接收外来目录并规范 id', async () => {
   const { tools } = await mount()
-  const src = mkdtempSync(join(tmpdir(), 'anki-as-import-'))
+  const src = tempDirSync('anki-as-import-')
   writeFileSync(join(src, 'scheme.json'), JSON.stringify({
     id: '数学 推导!!',
     title: '外来方案',

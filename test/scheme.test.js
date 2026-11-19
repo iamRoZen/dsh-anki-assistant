@@ -1,6 +1,7 @@
-import test from 'node:test'
+﻿import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readdir, writeFile } from 'node:fs/promises'
+import { readdir, writeFile } from 'node:fs/promises'
+import { tempDir } from './temp.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -51,7 +52,7 @@ test('规则引用了不存在的字段会被拒', () => {
 })
 
 test('save 只增不改：第二次 save 得到 v2，v1 仍可读', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'anki-as-scheme-'))
+  const root = await tempDir('anki-as-scheme-')
   const store = createStore(root)
   await store.init()
 
@@ -70,7 +71,7 @@ test('save 只增不改：第二次 save 得到 v2，v1 仍可读', async () => 
 })
 
 test('list 默认不返回 draft', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'anki-as-scheme-'))
+  const root = await tempDir('anki-as-scheme-')
   const store = createStore(root)
   await store.init()
   await saveScheme(root, { ...baseScheme({ status: 'active' }), changeWhy: 'a' })
@@ -83,7 +84,7 @@ test('list 默认不返回 draft', async () => {
 })
 
 test('种子只补缺，不覆盖已有版本', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'anki-as-scheme-'))
+  const root = await tempDir('anki-as-scheme-')
   const store = createStore(root)
   await store.init()
   const seeds = [baseScheme({ id: 'seed-a' }), baseScheme({ id: 'seed-b' })]
@@ -95,7 +96,7 @@ test('种子只补缺，不覆盖已有版本', async () => {
 })
 
 test('损坏的方案文件被隔离，不再阻塞其他方案', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'anki-as-scheme-'))
+  const root = await tempDir('anki-as-scheme-')
   const store = createStore(root)
   await store.init()
   await saveScheme(root, { ...baseScheme(), changeWhy: 'ok' })

@@ -117,7 +117,12 @@ anki-assistant/
 npm test                                   # 根测试：工具、方案、批次、写入、预览、方案入口
 node assets/schemes/medical-qac-2026/test/run.mjs   # 方案独立复验
 node assets/schemes/medical-qac-2026/test/entry.mjs # 两个入口的真实调用
+
+npm run clean:temp                         # 列出本项目在 %TEMP% 留下的沙箱目录
+npm run clean:temp -- --apply --older-than=24       # 删除 24 小时前的
 ```
+
+测试与模拟脚本会在退出时清掉自建的临时目录；历史残留用 `clean:temp` 处理，只匹配 `anki-*`、`HeadlessEdge*`、`sim-*`。
 
 ## 边界
 
