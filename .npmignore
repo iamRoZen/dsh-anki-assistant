@@ -6,3 +6,5 @@ dist/
 node_modules/
 *.log
 *.tgz
+# 截图只在 GitHub 上展示，不随 npm 包分发
+docs/images/
