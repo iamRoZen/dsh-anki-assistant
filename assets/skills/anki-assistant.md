@@ -74,6 +74,13 @@
   **呈现修正后的版本**，并说明改了什么。不要停在"发现了一个问题"。
 - 只有修不动、或涉及设计取舍（例如要不要换方案风格）时才问用户。
 
+## 删除与保护
+
+- 方案：`scheme delete` 需 `confirm=true`；active 方案还要 `force=true`；有任何批次钉住该方案时直接拒绝。
+- 实践：`practice delete` 需 `confirm=true`。
+- Anki 卡：`card_write delete notes=[…] confirm=true`；删除前读一次、删除后再读一次核对，审计留痕。
+- 删除不可恢复：先确认对象、数量与影响，再执行。
+
 ## 工具只做确定性的事
 
 `materials` 取原文与行号；`batch` 排队；`card_write` 预览/写入/回读；`practice` 看案例。

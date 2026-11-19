@@ -155,6 +155,57 @@ test('scheme test 用方案自带的 validate.mjs 跑样本', async () => {
   assert.equal(result.test.cases.length, 2)
 })
 
+test('practice save 可写、可读、可删', async () => {
+  const { tools } = await mount()
+  const practice = tools.get('practice')
+  await practice.execute({
+    action: 'save',
+    id: 'p-test',
+    title: '测试实践',
+    body: '# 实践\n\n一条记录。',
+    scheme: 'qac-memory',
+    schemeVersion: 2,
+    modules: ['制作卡片'],
+    tags: ['测试'],
+  }, {})
+  const list = await practice.execute({ action: 'list', scheme: 'qac-memory' }, {})
+  assert.equal(list.cases.some((entry) => entry.id === 'p-test'), true)
+  const got = await practice.execute({ action: 'get', id: 'p-test' }, {})
+  assert.match(got.case.body, /一条记录/)
+  await practice.execute({ action: 'delete', id: 'p-test', confirm: true }, {})
+  await assert.rejects(() => practice.execute({ action: 'get', id: 'p-test' }, {}), /没有实践/)
+})
+
+test('scheme delete：需确认，删后读不到', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  await scheme.execute({
+    action: 'save',
+    id: 'del-test',
+    scheme: {
+      id: 'del-test',
+      title: '待删方案',
+      status: 'draft',
+      deliverable: 'cards',
+      output: { model: 'M', fields: [{ name: '问题', spec: '一句问句' }] },
+    },
+    body: '',
+    changeWhy: '测试删除',
+  }, {})
+  await assert.rejects(() => scheme.execute({ action: 'delete', id: 'del-test' }, {}), /confirm=true/)
+  const result = await scheme.execute({ action: 'delete', id: 'del-test', confirm: true }, {})
+  assert.equal(result.deleted.id, 'del-test')
+  await assert.rejects(() => scheme.execute({ action: 'get', id: 'del-test' }, {}), /没有方案/)
+})
+
+test('card_write delete 需要确认', async () => {
+  const { tools } = await mount()
+  await assert.rejects(
+    () => tools.get('card_write').execute({ action: 'delete', notes: [1] }, {}),
+    /confirm=true/,
+  )
+})
+
 test('scheme import 接收外来目录并规范 id', async () => {
   const { tools } = await mount()
   const src = tempDirSync('anki-as-import-')

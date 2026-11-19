@@ -4,7 +4,7 @@
  * 这一层只做两件事：把数据层的确定性操作暴露成工具，并把"什么时候该用哪一层"
  * 写进提示词。它不产出步骤序列——顺序由 Agent 决定。
  */
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -23,7 +23,7 @@ import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteErro
 import { findLines, readMaterial } from './lib/materials.js'
 import { clozeFieldName, fixClozeBraces, scanCloze } from './lib/cloze.js'
 import { buildCardsHtml, buildPrintHtml, fieldsToHtml, measureOverflow, openFile, renderPdf, renderPng, renderTemplate, splitFields } from './lib/preview.js'
-import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readPackageSchemeRecord, readSchemeBody, readTemplate, refreshSchemeAssets, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
+import { getPracticeSync, deletePracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readPackageSchemeRecord, readSchemeBody, readTemplate, refreshSchemeAssets, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync, upsertPracticeSync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
 
 const PROVIDER = 'anki-assistant'
@@ -247,7 +247,9 @@ export function apply(ctx, config = {}) {
       '制卡方案的读写。方案是数据不是代码：适用场景、所需输入、各阶段方法、输出字段规范、'
       + '质量规则、验收标准、已知局限。list 返回摘要，get 返回全文，save 永远写新版本（旧版本保留）。',
     parameters: {
-      action: { type: 'string', required: true, enum: ['list', 'get', 'save', 'import', 'test'] },
+      action: { type: 'string', required: true, enum: ['list', 'get', 'save', 'import', 'test', 'delete'] },
+      confirm: { type: 'boolean', description: 'delete 时需要 confirm=true' },
+      force: { type: 'boolean', description: 'delete 时允许删 active 方案（默认只允许 draft/deprecated）' },
       id: { type: 'string', description: '方案 id（get/save 必填）' },
       version: { type: 'integer', description: '版本号，缺省取当前 active' },
       scheme: { type: 'object', additionalProperties: true, description: 'save 时的方案对象（除 id/title/status 外都可省略）' },
@@ -277,9 +279,13 @@ export function apply(ctx, config = {}) {
           schemes: { type: 'array', items: { type: 'object', additionalProperties: true, properties: {} } },
           scheme: { type: 'object', additionalProperties: true, properties: {} },
           test: { type: 'object', additionalProperties: true, properties: {} },
+          deleted: { type: 'object', additionalProperties: true, properties: {} },
         },
       },
       render(_args, value) {
+        if (value.deleted) {
+          return text(`已删除方案 ${value.deleted.id}（${value.deleted.files} 个文件，${value.deleted.versions} 个版本）`)
+        }
         if (value.test) {
           const lines = [`测试：${value.test.ok ? '通过' : (value.test.kind === 'none' ? '无测试' : '未通过')}（${value.test.kind}）`]
           if (value.test.note) lines.push(`  ${value.test.note}`)
@@ -423,6 +429,40 @@ export function apply(ctx, config = {}) {
             ok: false,
             kind: 'none',
             note: `方案 ${scheme.id} 没有可执行的测试：方法草稿可以没有测试；卡片方案建议补 test/run.mjs 或 validate.mjs + samples/`,
+          },
+        }
+      }
+      if (args.action === 'delete') {
+        if (args.confirm !== true) throw new Error('delete 需要 confirm=true')
+        if (!args.id) throw new Error('delete 需要 id')
+        const scheme = await getScheme(store.root, args.id)
+        if (!scheme) throw new Error(`没有方案 ${args.id}`)
+        if (scheme.status === 'active' && args.force !== true) {
+          throw new Error(`方案 ${scheme.id} 仍是 active：先改成 deprecated，或加 force=true`)
+        }
+        const pinned = []
+        try {
+          for (const file of readdirSync(join(store.root, 'batches'))) {
+            if (!file.endsWith('.json')) continue
+            try {
+              const batch = JSON.parse(readFileSync(join(store.root, 'batches', file), 'utf8'))
+              if (batch.scheme?.id === scheme.id) pinned.push(batch.id)
+            } catch {
+              // 坏批次文件忽略
+            }
+          }
+        } catch {
+          // 没有批次目录
+        }
+        if (pinned.length > 0) throw new Error(`批次仍钉着 ${scheme.id}：${pinned.join(', ')}；先处理批次再删`)
+        const dir = join(store.root, 'schemes', scheme.id)
+        const remaining = existsSync(dir) ? readdirSync(dir) : []
+        rmSync(dir, { recursive: true, force: true })
+        return {
+          deleted: {
+            id: scheme.id,
+            files: remaining.length,
+            versions: remaining.filter((name) => /^v\d+\.json$/.test(name)).length,
           },
         }
       }
@@ -772,11 +812,13 @@ export function apply(ctx, config = {}) {
       + 'commit 按计划写入，先按标签找回已写过的卡再补写剩下的，所以重跑不会重复。verify 回读核对字段。'
       + '写入前请让用户看过 plan 的预览。',
     parameters: {
-      action: { type: 'string', required: true, enum: ['plan', 'commit', 'verify'] },
+      action: { type: 'string', required: true, enum: ['plan', 'commit', 'verify', 'delete'] },
       batch: { type: 'string', description: 'plan/verify 时的批次 id' },
       plan: { type: 'string', description: 'commit/verify 时的计划 id' },
       mode: { type: 'string', enum: ['add', 'update'], description: 'plan 时：add 新建卡（默认），update 改已有卡（题上需有 noteId）' },
       open: { type: 'boolean', description: 'commit 成功后用 Anki 浏览器打开刚写入的卡' },
+      notes: { type: 'array', items: { type: 'integer' }, description: 'delete 时的 noteId 数组' },
+      confirm: { type: 'boolean', description: 'delete 时需要 confirm=true' },
     },
     output: {
       schema: {
@@ -798,6 +840,17 @@ export function apply(ctx, config = {}) {
     },
     async execute(args) {
       await boot()
+      if (args.action === 'delete') {
+        if (args.confirm !== true) throw new Error('delete 需要 confirm=true')
+        const ids = (args.notes ?? []).map(Number).filter((id) => Number.isInteger(id))
+        if (ids.length === 0) throw new Error('delete 需要 notes（noteId 数组）')
+        const before = (await anki.notesInfo(ids)).filter(Boolean)
+        await anki.deleteNotes(ids)
+        const left = (await anki.notesInfo(ids)).filter(Boolean)
+        return {
+          text: `请求删除 ${ids.length} 张：删除前存在 ${before.length} 张${left.length === 0 ? '，已核对全部不存在' : `，仍有 ${left.length} 张存在（${left.map((note) => note.noteId).join(',')}）`}`,
+        }
+      }
       if (args.action === 'plan') {
         if (!args.batch) throw new Error('plan 需要 batch')
         const batch = await loadBatch(store.root, args.batch)
@@ -1103,10 +1156,18 @@ export function apply(ctx, config = {}) {
     name: 'practice',
     description:
       '实践库：每次真实制卡留下的记录。list 给摘要，可按方案、模块或标签筛选；'
-      + 'get 读全文——原始请求、用了哪些模块、方案版本、关键取舍、产物与核查结果。',
+      + 'get 读全文；save 记录一次真实运行（正文 + 关联方案/批次/noteId）；delete 需 confirm=true。',
     parameters: {
-      action: { type: 'string', required: true, enum: ['list', 'get'] },
-      id: { type: 'string', description: 'get 时的实践 id（文件名去掉 .md）' },
+      action: { type: 'string', required: true, enum: ['list', 'get', 'save', 'delete'] },
+      id: { type: 'string', description: 'get/save/delete 时的实践 id（文件名去掉 .md）' },
+      title: { type: 'string', description: 'save 时的标题' },
+      body: { type: 'string', description: 'save 时的正文（Markdown，必填）' },
+      schemeVersion: { type: 'integer', description: 'save 时关联的方案版本' },
+      modules: { type: 'array', items: { type: 'string' }, description: 'save 时用了哪些模块' },
+      tags: { type: 'array', items: { type: 'string' }, description: 'save 时的标签' },
+      batch: { type: 'string', description: 'save 时关联的批次 id' },
+      notes: { type: 'array', items: { type: 'integer' }, description: 'save 时关联的 noteId' },
+      confirm: { type: 'boolean', description: 'delete 时需要 confirm=true' },
       scheme: { type: 'string', description: 'list 时按方案 id 过滤' },
       module: { type: 'string', description: 'list 时按模块过滤，如 制作卡片' },
       tag: { type: 'string', description: 'list 时按标签过滤' },
@@ -1121,6 +1182,7 @@ export function apply(ctx, config = {}) {
         },
       },
       render(_args, value) {
+        if (value.case?.deleted) return text(`已删除实践 ${value.case.id}`)
         if (value.case) {
           return text(`${value.case.title ?? value.case.id}\n\n${String(value.case.body ?? '').slice(0, 12000)}`)
         }
@@ -1132,6 +1194,30 @@ export function apply(ctx, config = {}) {
     },
     async execute(args) {
       await boot()
+      if (args.action === 'save') {
+        if (!args.body) throw new Error('save 需要 body（Markdown 正文）')
+        const id = String(args.id ?? '').trim() || `practice-${Date.now().toString(36)}`
+        const entry = {
+          id,
+          title: args.title ?? id,
+          doc: `${id}.md`,
+          date: new Date().toISOString().slice(0, 10),
+          modules: args.modules ?? [],
+          tags: args.tags ?? [],
+          scheme: args.scheme ? { id: args.scheme, version: args.schemeVersion ?? null } : null,
+          batch: args.batch ?? null,
+          notes: args.notes ?? [],
+          body: String(args.body),
+        }
+        const saved = upsertPracticeSync(store.root, entry)
+        return { case: { ...saved, body: entry.body } }
+      }
+      if (args.action === 'delete') {
+        if (args.confirm !== true) throw new Error('delete 需要 confirm=true')
+        if (!args.id) throw new Error('delete 需要 id')
+        if (!deletePracticeSync(store.root, args.id)) throw new Error(`没有实践 ${args.id}`)
+        return { case: { id: args.id, deleted: true } }
+      }
       if (args.action === 'get') {
         if (!args.id) throw new Error('get 需要 id')
         const found = getPracticeSync(store.root, args.id)
@@ -1166,6 +1252,7 @@ export function apply(ctx, config = {}) {
         '验收分两层：测试通过只是工程层；每次改动后至少从真实笔记渲染一张卡 present 给用户看，才算用户层。Anki 没开就说明，并用最近一次渲染代替。',
         '看图或 measure 发现问题：改字段 → 重新 plan/commit → 重新 card_preview，再呈现修正后的版本；不要只解释错误。',
         '改了草稿、方案版本或目标，旧计划自动作废，需要重新 plan。',
+        '删除要谨慎：scheme / practice / card_write 都需 confirm=true；active 方案需 force=true；批次仍钉着方案时拒绝删除。',
         index.length ? `现有方案：\n${index.slice(0, 15).join('\n')}` : '现有方案：无（用 scheme save 建档）',
       ].join('\n')
     },
