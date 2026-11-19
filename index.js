@@ -847,9 +847,15 @@ export function apply(ctx, config = {}) {
         const before = (await anki.notesInfo(ids)).filter(Boolean)
         await anki.deleteNotes(ids)
         const left = (await anki.notesInfo(ids)).filter(Boolean)
-        return {
-          text: `请求删除 ${ids.length} 张：删除前存在 ${before.length} 张${left.length === 0 ? '，已核对全部不存在' : `，仍有 ${left.length} 张存在（${left.map((note) => note.noteId).join(',')}）`}`,
+        let detail
+        if (before.length === 0) {
+          detail = `请求删除 ${ids.length} 张：这些 note 本来就不存在，没有可删的`
+        } else if (left.length === 0) {
+          detail = `请求删除 ${ids.length} 张：删除前存在 ${before.length} 张，已核对全部不存在`
+        } else {
+          detail = `请求删除 ${ids.length} 张：删除前存在 ${before.length} 张，仍有 ${left.length} 张存在（${left.map((note) => note.noteId).join(',')}）`
         }
+        return { text: detail }
       }
       if (args.action === 'plan') {
         if (!args.batch) throw new Error('plan 需要 batch')
