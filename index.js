@@ -4,7 +4,7 @@
  * 这一层只做两件事：把数据层的确定性操作暴露成工具，并把"什么时候该用哪一层"
  * 写进提示词。它不产出步骤序列——顺序由 Agent 决定。
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
 import { createStore, readJson } from './lib/store.js'
-import { getScheme, listSchemes, saveScheme, seedSchemes, seedSchemesSync } from './lib/scheme.js'
+import { getScheme, listSchemes, normalizeSchemeId, saveScheme, seedSchemes, seedSchemesSync } from './lib/scheme.js'
 import { createAnki, AnkiError } from './lib/anki.js'
 import {
   batchFile, createBatch, loadBatch, nextItem, saveBatch, setStatus, summarize, upsertItems, view,
@@ -224,7 +224,7 @@ export function apply(ctx, config = {}) {
       '制卡方案的读写。方案是数据不是代码：适用场景、所需输入、各阶段方法、输出字段规范、'
       + '质量规则、验收标准、已知局限。list 返回摘要，get 返回全文，save 永远写新版本（旧版本保留）。',
     parameters: {
-      action: { type: 'string', required: true, enum: ['list', 'get', 'save'] },
+      action: { type: 'string', required: true, enum: ['list', 'get', 'save', 'import'] },
       id: { type: 'string', description: '方案 id（get/save 必填）' },
       version: { type: 'integer', description: '版本号，缺省取当前 active' },
       scheme: { type: 'object', additionalProperties: true, description: 'save 时的方案对象（除 id/title/status 外都可省略）' },
@@ -241,6 +241,7 @@ export function apply(ctx, config = {}) {
           },
         },
       },
+      path: { type: 'string', description: 'import 时：外来方案目录的绝对路径（内含 scheme.json）' },
       changeWhy: { type: 'string', description: 'save 时说明这次改了什么、为什么' },
       includeDrafts: { type: 'boolean', description: 'list 时是否包含 draft 方案，默认 false' },
       query: { type: 'string', description: 'list 时按 id / 标题 / 正文关键词过滤' },
@@ -329,6 +330,35 @@ export function apply(ctx, config = {}) {
             files: schemeFiles(store.root, scheme.id),
           },
         }
+      }
+      if (args.action === 'import') {
+        if (!args.path) throw new Error('import 需要 path（外来方案目录）')
+        const src = String(args.path)
+        if (!existsSync(src)) throw new Error(`找不到目录：${src}`)
+        const recordFile = join(src, 'scheme.json')
+        if (!existsSync(recordFile)) throw new Error('导入目录里没有 scheme.json')
+        let record
+        try {
+          record = JSON.parse(readFileSync(recordFile, 'utf8'))
+        } catch (error) {
+          throw new Error(`scheme.json 解析失败：${error.message}`)
+        }
+        const id = normalizeSchemeId(record.id ?? basename(src))
+        const dest = join(store.root, 'schemes', id)
+        if (existsSync(dest)) {
+          throw new Error(`已有方案 ${id}：确认要改成新版本还是换名，再决定是否导入`)
+        }
+        cpSync(src, dest, { recursive: true })
+        const saved = await saveScheme(store.root, {
+          ...record,
+          id,
+          title: record.title ?? basename(src),
+          status: record.status ?? 'draft',
+          changeWhy: args.changeWhy ?? '导入外来方案',
+        })
+        const bodyFile = join(dest, 'body.md')
+        if (existsSync(bodyFile)) copyFileSync(bodyFile, join(dest, `body.v${saved.version}.md`))
+        return { scheme: saved, id, from: src, files: schemeFiles(store.root, id) }
       }
       if (!args.scheme) throw new Error('save 需要 scheme 对象')
       if (!args.scheme.id) throw new Error('save 需要 scheme.id')

@@ -1,9 +1,10 @@
-﻿/**
+/**
  * 激活测试：不启动 DSH，直接 apply 一遍，确认四个工具、skill 与提示词段都注册成功。
  * 依赖本地 node_modules 里的 dsh-tools 形状桩（不进发布包）。
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -87,6 +88,27 @@ test('scheme save 拒绝越界附件路径', async () => {
     changeWhy: '测试越界',
     files: [{ path: '../evil.md', content: 'x' }],
   }, {}), /非法附件路径/)
+})
+
+test('scheme import 接收外来目录并规范 id', async () => {
+  const { tools } = await mount()
+  const src = mkdtempSync(join(tmpdir(), 'anki-as-import-'))
+  writeFileSync(join(src, 'scheme.json'), JSON.stringify({
+    id: '数学 推导!!',
+    title: '外来方案',
+    status: 'draft',
+    deliverable: 'cards',
+    output: { model: 'M', fields: [{ name: '问题', spec: '有主语的问题' }] },
+  }), 'utf8')
+  writeFileSync(join(src, 'body.md'), '# 外来正文', 'utf8')
+  writeFileSync(join(src, 'notes.md'), '经验', 'utf8')
+
+  const scheme = tools.get('scheme')
+  const result = await scheme.execute({ action: 'import', path: src, changeWhy: '测试导入' }, {})
+  assert.equal(result.id, '数学-推导')
+  const got = await scheme.execute({ action: 'get', id: '数学-推导' }, {})
+  assert.match(got.scheme.body, /外来正文/)
+  assert.equal(got.scheme.files.some((file) => file.path === 'notes.md'), true)
 })
 
 test('每个工具都有参数、输出 schema 与 render', async () => {
