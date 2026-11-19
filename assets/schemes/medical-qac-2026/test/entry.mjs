@@ -1,4 +1,4 @@
-﻿/**
+/**
  * medical-qac-2026 的入口级测试：真实调用 batch validate 与 card_write plan，
  * 用临时数据 + 模拟 Anki，不连真实库、不写 Anki。
  *
