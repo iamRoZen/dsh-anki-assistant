@@ -3,6 +3,15 @@
 一个**可选的 Agent 环境**（Preset「Anki Assistant」）：用方案驱动做卡，工具只做确定性的事——
 存方案、排队、校验、写入、回读、渲染。判断（怎么取原文、怎么拆卡、怎么写记忆提示）由 Agent 与方案决定。
 
+## 名称
+
+| 用途 | 值 |
+|---|---|
+| npm 包 / 仓库建议名 | `dsh-anki-assistant` |
+| Preset 显示名 | Anki Assistant |
+| 插件内部 id | `anki-assistant` |
+| 数据目录 | `~/.dsh/anki-assistant` |
+
 ## 目录
 
 ```
