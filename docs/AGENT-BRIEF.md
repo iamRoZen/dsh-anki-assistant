@@ -143,20 +143,19 @@ blocked  failed/parked
 3. 删除方案前确认没有 Agent 正在 `batch open`。
 4. 需要并行时：只读操作（get/list/notesInfo/preview）可并行，写入串行。
 
-## 10. 子 Agent 协作
+## 10. 子 Agent 协作（可直接执行）
 
-已验证：子 Agent 继承父会话的**同一套工具与 persona**（`scheme`、`materials`、`card_write` 都有）。所以能力不是问题，"谁写"才是问题。
+已验证：子 Agent 继承父会话的**同一套工具与 persona**（`scheme`、`materials`、`card_write` 都有），可以直接跑完整条链。
 
-适用：多章 / >20 张 / 顺序做要一小时以上。按节拆，3–4 个并行。
+分权规则比"只读"更实际：
 
-派发时必须写清：
+1. **一个批次一个 owner**：每个子 Agent 用自己的批次 id（如 `gaoshu-§2.1`），只写自己的批次；
+2. 子 Agent 不新建/修改/删除方案，不删卡、不删批次；
+3. 主 Agent 先建好牌组与模型，把 `deck`、`model`、`scheme@version`、页码范围写进派发提示；
+4. 子 Agent 可跑：`batch open/put/validate/fix` → `card_write plan/commit/verify` → `card_preview`；回报批次 id、写入数、verify 结果、预览路径；
+5. 主 Agent 收口：汇总、抽查预览、`present`；跨批去重与冲突由主 Agent 处理。
 
-- 方案 `id@version`、本节页码范围、字段规范（或让它 `scheme get`）；
-- 只交候选卡：字段 + 出处 `p页:L行` + 不确定的点；
-- **禁止** `batch` / `card_write` / `scheme save|delete`，不要写 Anki；
-- 主 Agent 收口：合并去重 → `batch put` → `validate` → `plan` → `commit` → `verify` → `present`。
-
-子 Agent 继承工具也意味着它**能**误写。协议靠提示词，没有硬隔离；如果以后要硬隔离，得给子 Agent 单独挂收窄的 preset。
+并发边界：不同批次可以并行（各自文件、提交锁按批次）；同一批次绝不并发。子 Agent 继承工具，所以"不越界"靠提示词，不是硬隔离。
 
 ## 11. 版本
 
