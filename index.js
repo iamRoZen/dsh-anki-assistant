@@ -1127,6 +1127,7 @@ export function apply(ctx, config = {}) {
         '资料定位用 materials，返回的 p页:L行 可直接写进定位字段。',
         '写入先 card_write plan 给用户看，确认后 commit；commit 可 open=true 在 Anki 里打开，card_preview 可渲染预览或出 PDF。',
         '渲染后把文件交给用户：HTML/PNG/PDF 用 present 呈现，不要只说「已生成」。',
+        '验收分两层：测试通过只是工程层；每次改动后至少从真实笔记渲染一张卡 present 给用户看，才算用户层。Anki 没开就说明，并用最近一次渲染代替。',
         '看图或 measure 发现问题：改字段 → 重新 plan/commit → 重新 card_preview，再呈现修正后的版本；不要只解释错误。',
         '改了草稿、方案版本或目标，旧计划自动作废，需要重新 plan。',
         index.length ? `现有方案：\n${index.slice(0, 15).join('\n')}` : '现有方案：无（用 scheme save 建档）',
