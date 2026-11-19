@@ -50,7 +50,7 @@ anki-assistant/
 
 | 工具 | 作用 |
 |---|---|
-| `scheme` | 方案库：`list` / `get`（正文、模板、实践、目录文件清单） / `save`（永远写新版本） / `import`（导入外来目录，自动规范 id） |
+| `scheme` | 方案库：`list` / `get`（正文、模板、实践、目录文件清单） / `save`（永远写新版本） / `import`（导入外来目录，自动规范 id） / `test`（跑方案自带测试或样卡） |
 | `practice` | 实践库：按方案/模块/标签筛选，读全文 |
 | `batch` | 批次：`open` / `put` / `validate` / `next` / `mark` / `status` |
 | `materials` | 读资料并给行号：PDF 按页重建行，可按关键词只取命中行 |

@@ -5,6 +5,7 @@
  * 写进提示词。它不产出步骤序列——顺序由 Agent 决定。
  */
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -26,6 +27,28 @@ import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetScheme
 import { evaluate } from './lib/rules.js'
 
 const PROVIDER = 'anki-assistant'
+/** 跑方案自带的测试脚本：node <script>，收 stdout/stderr，超时杀掉。 */
+function runNodeScript(script, cwd, timeoutMs = 60000) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [script], { cwd, windowsHide: true })
+    let out = ''
+    child.stdout?.on('data', (chunk) => { out += chunk.toString('utf8') })
+    child.stderr?.on('data', (chunk) => { out += chunk.toString('utf8') })
+    const timer = setTimeout(() => {
+      child.kill()
+      resolve({ code: -1, out: `${out}\n[超时 ${timeoutMs}ms]` })
+    }, timeoutMs)
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      resolve({ code: -1, out: String(error.message) })
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      resolve({ code, out })
+    })
+  })
+}
+
 /** 方案目录文件清单：让 Agent 知道除了正文还有什么（脚本、样卡、截图、笔记）。 */
 function schemeFiles(root, id) {
   const dir = join(root, 'schemes', id)
@@ -224,7 +247,7 @@ export function apply(ctx, config = {}) {
       '制卡方案的读写。方案是数据不是代码：适用场景、所需输入、各阶段方法、输出字段规范、'
       + '质量规则、验收标准、已知局限。list 返回摘要，get 返回全文，save 永远写新版本（旧版本保留）。',
     parameters: {
-      action: { type: 'string', required: true, enum: ['list', 'get', 'save', 'import'] },
+      action: { type: 'string', required: true, enum: ['list', 'get', 'save', 'import', 'test'] },
       id: { type: 'string', description: '方案 id（get/save 必填）' },
       version: { type: 'integer', description: '版本号，缺省取当前 active' },
       scheme: { type: 'object', additionalProperties: true, description: 'save 时的方案对象（除 id/title/status 外都可省略）' },
@@ -253,13 +276,25 @@ export function apply(ctx, config = {}) {
         properties: {
           schemes: { type: 'array', items: { type: 'object', additionalProperties: true, properties: {} } },
           scheme: { type: 'object', additionalProperties: true, properties: {} },
+          test: { type: 'object', additionalProperties: true, properties: {} },
         },
       },
       render(_args, value) {
+        if (value.test) {
+          const lines = [`测试：${value.test.ok ? '通过' : '未通过'}（${value.test.kind}）`]
+          for (const entry of value.test.cases ?? []) {
+            lines.push(`  ${entry.case}: ${entry.ok ? '✓' : '✗'}${entry.codes?.length ? ` 命中 ${entry.codes.join(',')}` : ''}${entry.missing?.length ? ` 缺 ${entry.missing.join(',')}` : ''}`)
+          }
+          if (value.test.output) lines.push('', value.test.output)
+          return text(lines.join('\n'))
+        }
         if (value.scheme) {
           const scheme = value.scheme
           const lines = [
             `${scheme.id}@${scheme.version} ${scheme.title}（${scheme.status}）`,
+            ...(scheme.deliverable === 'method'
+              ? ['这是方法草稿：只有正文，还没有卡片产出。要出卡时再补模型与字段，并先做样卡。']
+              : []),
             `适用：${(scheme.appliesTo?.cardTypes ?? []).join('、')}｜${(scheme.appliesTo?.subjects ?? []).join('、')}`,
             `输入：${(scheme.inputs ?? []).map((input) => `${input.kind}${input.required ? '*' : ''}`).join('、')}`,
           ]
@@ -297,7 +332,11 @@ export function apply(ctx, config = {}) {
           return text(lines.join('\n'))
         }
         return text((value.schemes ?? [])
-          .map((entry) => `${entry.id}@${entry.version}｜${entry.title}｜${(entry.appliesTo?.cardTypes ?? []).join('/')}｜${entry.status}`)
+          .map((entry) => {
+            const kind = entry.deliverable === 'method' ? '方法草稿' : '卡片方案'
+            const types = (entry.appliesTo?.cardTypes ?? []).join('/')
+            return `${entry.id}@${entry.version}｜${entry.title}｜${kind}${types ? `：${types}` : ''}｜${entry.status}`
+          })
           .join('\n') || '还没有方案，用 save 建档')
       },
     },
@@ -330,6 +369,55 @@ export function apply(ctx, config = {}) {
             files: schemeFiles(store.root, scheme.id),
           },
         }
+      }
+      if (args.action === 'test') {
+        if (!args.id) throw new Error('test 需要 id')
+        const scheme = await getScheme(store.root, args.id, args.version)
+        if (!scheme) throw new Error(`没有方案 ${args.id}`)
+        const dir = join(store.root, 'schemes', scheme.id)
+        const runner = join(dir, 'test', 'run.mjs')
+        if (existsSync(runner)) {
+          const result = await runNodeScript(runner, dir)
+          return {
+            test: {
+              ok: result.code === 0,
+              kind: 'test/run.mjs',
+              code: result.code,
+              output: result.out.slice(-4000),
+            },
+          }
+        }
+        const validatorFile = join(dir, scheme.quality?.validator?.module ?? scheme.quality?.legacy?.module ?? 'validate.mjs')
+        if (existsSync(validatorFile)) {
+          const mod = await import(pathToFileURL(validatorFile).href)
+          if (typeof mod.validate !== 'function') {
+            throw new Error(`方案 ${scheme.id} 的 ${validatorFile.split(/[\\/]/).pop()} 没有导出 validate`)
+          }
+          const cases = []
+          for (const name of ['pass', 'fail']) {
+            const sampleFile = join(dir, 'samples', `${name}.json`)
+            if (!existsSync(sampleFile)) continue
+            const sample = JSON.parse(readFileSync(sampleFile, 'utf8'))
+            const verdict = await mod.validate(sample.fields ?? {}, {
+              checks: scheme.quality?.validator?.checks ?? scheme.quality?.legacy?.checks ?? null,
+            })
+            const codes = (verdict.issues ?? []).map((issue) => issue.code)
+            const expected = sample.expect ?? []
+            const missing = expected.filter((code) => !codes.includes(code))
+            const ok = name === 'pass'
+              ? verdict.ok !== false && codes.length === 0
+              : missing.length === 0
+            cases.push({ case: name, ok, codes, missing })
+          }
+          return {
+            test: {
+              ok: cases.length > 0 && cases.every((entry) => entry.ok),
+              kind: 'validate.mjs + samples',
+              cases,
+            },
+          }
+        }
+        throw new Error(`方案 ${scheme.id} 没有可执行的测试：test/run.mjs 与 validate.mjs 都不存在`)
       }
       if (args.action === 'import') {
         if (!args.path) throw new Error('import 需要 path（外来方案目录）')

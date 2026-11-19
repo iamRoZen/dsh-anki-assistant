@@ -90,6 +90,55 @@ test('scheme save 拒绝越界附件路径', async () => {
   }, {}), /非法附件路径/)
 })
 
+test('只有正文的方案算方法草稿，不会被当成卡片方案', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  await scheme.execute({
+    action: 'save',
+    id: 'note-from-article',
+    scheme: { id: 'note-from-article', title: '一篇博文的策略', status: 'draft' },
+    body: '# 一句话策略',
+    changeWhy: '读到一篇文章，先记下来',
+  }, {})
+  const got = await scheme.execute({ action: 'get', id: 'note-from-article' }, {})
+  assert.equal(got.scheme.deliverable, 'method')
+  const shown = scheme.output.render({}, got).map((part) => part.text ?? '').join('')
+  const listed = scheme.output.render({}, { schemes: [got.scheme] }).map((part) => part.text ?? '').join('')
+  assert.match(shown, /方法草稿/)
+  assert.match(listed, /方法草稿/)
+})
+test('scheme test 用方案自带的 validate.mjs 跑样本', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  const validator = [
+    'export async function validate(fields) {',
+    "  const bad = String(fields['答案'] ?? '').includes('坏')",
+    "  return { ok: !bad, issues: bad ? [{ code: 'BAD', message: '坏答案' }] : [], source: { status: 'unverified' } }",
+    '}',
+  ].join('\n')
+  await scheme.execute({
+    action: 'save',
+    id: 'tested-scheme',
+    scheme: {
+      id: 'tested-scheme',
+      title: '可测方案',
+      status: 'draft',
+      deliverable: 'cards',
+      output: { model: 'M', fields: [{ name: '答案', spec: '答案' }] },
+    },
+    body: '',
+    changeWhy: '测试',
+    files: [
+      { path: 'validate.mjs', content: validator },
+      { path: 'samples/pass.json', content: JSON.stringify({ fields: { 答案: '好' } }) },
+      { path: 'samples/fail.json', content: JSON.stringify({ fields: { 答案: '坏' }, expect: ['BAD'] }) },
+    ],
+  }, {})
+  const result = await scheme.execute({ action: 'test', id: 'tested-scheme' }, {})
+  assert.equal(result.test.ok, true)
+  assert.equal(result.test.cases.length, 2)
+})
+
 test('scheme import 接收外来目录并规范 id', async () => {
   const { tools } = await mount()
   const src = mkdtempSync(join(tmpdir(), 'anki-as-import-'))
