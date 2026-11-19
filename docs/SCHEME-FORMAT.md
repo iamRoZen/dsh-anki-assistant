@@ -94,6 +94,22 @@
 2. **批次钉版本**：批次记录 `{id, version}`，改方案不影响正在跑的批次。
 3. **判据随方案**：`validate.mjs` 与 `vendor/` 放在方案目录里，换掉方案，判据一起消失。
 
+## 模块边界（v1 定稿）
+
+方案模块只做三件事：**存、取、测**。边界内的不变量：
+
+1. 方案 = 不可变版本记录 + 目录附件；id 规范化；状态 `draft` / `active` / `deprecated`。
+2. 两种形态：`method`（知识，可只有正文）与 `cards`（生产契约，必须有模型与字段）。
+3. 机器只读四样：`scheme.json`、`body.md`、校验器模块、`print.css`；其余文件自由。
+4. 批次钉 `{id, version}`；改方案不影响在跑批次。
+5. 校验器契约：`validate(fields, options) → { suite, ok, issues, source }`；缺失或异常即报错。
+6. 测试契约：优先 `test/run.mjs`，否则 `validate.mjs` + `samples/`；都没有时如实报「无测试」。
+7. 系统提示词只放索引（`id@version title 类型`），正文按需 `scheme get`，不整段塞进上下文。
+
+不在方案模块里：任务流程与阶段（Agent 决定）、判重与写入（`batch` / `card_write`）、学习效果验证（只能靠真实复习反馈）。
+
+升级路径：素材 → `method` 草稿 → 真卡 + 样卡 + 判据 → `scheme test` 通过 → `cards` + `active`。
+
 ## 写一个新方案的顺序
 
 1. 想清三件事：这张卡要回忆什么、答案是什么结构、什么算错。

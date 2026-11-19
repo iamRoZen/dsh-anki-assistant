@@ -281,7 +281,8 @@ export function apply(ctx, config = {}) {
       },
       render(_args, value) {
         if (value.test) {
-          const lines = [`测试：${value.test.ok ? '通过' : '未通过'}（${value.test.kind}）`]
+          const lines = [`测试：${value.test.ok ? '通过' : (value.test.kind === 'none' ? '无测试' : '未通过')}（${value.test.kind}）`]
+          if (value.test.note) lines.push(`  ${value.test.note}`)
           for (const entry of value.test.cases ?? []) {
             lines.push(`  ${entry.case}: ${entry.ok ? '✓' : '✗'}${entry.codes?.length ? ` 命中 ${entry.codes.join(',')}` : ''}${entry.missing?.length ? ` 缺 ${entry.missing.join(',')}` : ''}`)
           }
@@ -417,7 +418,13 @@ export function apply(ctx, config = {}) {
             },
           }
         }
-        throw new Error(`方案 ${scheme.id} 没有可执行的测试：test/run.mjs 与 validate.mjs 都不存在`)
+        return {
+          test: {
+            ok: false,
+            kind: 'none',
+            note: `方案 ${scheme.id} 没有可执行的测试：方法草稿可以没有测试；卡片方案建议补 test/run.mjs 或 validate.mjs + samples/`,
+          },
+        }
       }
       if (args.action === 'import') {
         if (!args.path) throw new Error('import 需要 path（外来方案目录）')
@@ -1113,12 +1120,12 @@ export function apply(ctx, config = {}) {
       const index = schemeIndexSync(settings.dataDir)
       return [
         '## 工具与方案约定',
-        '可用工具：scheme（方案）、practice（实践）、batch（批次）、materials（资料与行号）、card_write（plan/commit/verify）、card_preview（离线渲染预览）。',
-        '方法是方案的事：动手前 scheme list，选中后 scheme get 会带回正文、卡片模板与用过的实践；方案没写的部分由任务决定。',
+        '可用工具：scheme（方案）、practice（实践）、batch（批次）、materials（资料与行号）、card_write（plan/commit/verify）、card_preview（离线渲染与打印）。',
+        '有现成方案先用现成的：scheme list → scheme get（正文、模板、实践、目录文件清单）；方案没写的部分由任务决定。',
+        '想试新方法：scheme save 先存 draft，可只有正文；做几张真卡后把样卡与判据写进方案目录，scheme test 验证，确认后再 active。',
         '资料定位用 materials，返回的 p页:L行 可直接写进定位字段。',
-        '写入先 card_write plan 给用户看，确认后 commit；commit 可 open=true 在 Anki 里打开，card_preview 可渲染正反面离线预览。',
+        '写入先 card_write plan 给用户看，确认后 commit；commit 可 open=true 在 Anki 里打开，card_preview 可渲染预览或出 PDF。',
         '改了草稿、方案版本或目标，旧计划自动作废，需要重新 plan。',
-        '用户从一次操作里体现新方法时，先存成 draft 方案并说明，经确认再 active。',
         index.length ? `现有方案：\n${index.slice(0, 15).join('\n')}` : '现有方案：无（用 scheme save 建档）',
       ].join('\n')
     },

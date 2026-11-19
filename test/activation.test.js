@@ -107,6 +107,22 @@ test('只有正文的方案算方法草稿，不会被当成卡片方案', async
   assert.match(shown, /方法草稿/)
   assert.match(listed, /方法草稿/)
 })
+test('没有测试的方案返回「无测试」而不是报错', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  await scheme.execute({
+    action: 'save',
+    id: 'no-test-note',
+    scheme: { id: 'no-test-note', title: '没有测试的方法草稿', status: 'draft' },
+    body: '# 只有正文',
+    changeWhy: '测试无测试情况',
+  }, {})
+  const result = await scheme.execute({ action: 'test', id: 'no-test-note' }, {})
+  assert.equal(result.test.ok, false)
+  assert.equal(result.test.kind, 'none')
+  assert.match(result.test.note, /没有可执行的测试/)
+})
+
 test('scheme test 用方案自带的 validate.mjs 跑样本', async () => {
   const { tools } = await mount()
   const scheme = tools.get('scheme')
