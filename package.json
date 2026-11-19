@@ -8,11 +8,11 @@
   "author": "Anki Assistant contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iamRoZen/anki-assistant.git"
+    "url": "git+https://github.com/iamRoZen/dsh-anki-assistant.git"
   },
-  "homepage": "https://github.com/iamRoZen/anki-assistant#readme",
+  "homepage": "https://github.com/iamRoZen/dsh-anki-assistant#readme",
   "bugs": {
-    "url": "https://github.com/iamRoZen/anki-assistant/issues"
+    "url": "https://github.com/iamRoZen/dsh-anki-assistant/issues"
   },
   "keywords": [
     "anki",
@@ -39,7 +39,9 @@
     "icon.svg",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md"
   ],
   "scripts": {
     "test": "node --test \"test/*.test.js\"",

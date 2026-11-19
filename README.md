@@ -7,10 +7,16 @@
 
 | 用途 | 值 |
 |---|---|
-| npm 包 / 仓库建议名 | `dsh-anki-assistant` |
+| npm 包 / 仓库名 | `dsh-anki-assistant` |
 | Preset 显示名 | Anki Assistant |
 | 插件内部 id | `anki-assistant` |
 | 数据目录 | `~/.dsh/anki-assistant` |
+
+## 截图
+
+![结构与模拟工作流](docs/images/explainer.png)
+
+![真实卡面：正面问题与挖空、背面分条答案与引用](docs/images/cards.png)
 
 ## 目录
 
@@ -134,6 +140,13 @@ npm run clean:temp -- --apply --older-than=24       # 删除 24 小时前的
 ```
 
 测试与模拟脚本会在退出时清掉自建的临时目录；历史残留用 `clean:temp` 处理，只匹配 `anki-*`、`HeadlessEdge*`、`sim-*`。
+
+## 相关工作
+
+- [执行 Agent 手册](docs/AGENT-BRIEF.md)：开工检查、工具契约、批次状态机、失败手册、并发约定
+- [方案格式](docs/SCHEME-FORMAT.md)：目录结构、七条不变量、写作顺序、分享方式
+- [设计取舍](docs/DETAIL.md)：为什么这样分层、为什么判据归方案
+- [贡献指南](CONTRIBUTING.md)｜[变更记录](CHANGELOG.md)
 
 ## 边界
 
