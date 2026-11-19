@@ -21,7 +21,7 @@ import {
 } from './lib/batch.js'
 import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteError } from './lib/write.js'
 import { findLines, readMaterial } from './lib/materials.js'
-import { scanCloze } from './lib/cloze.js'
+import { fixClozeBraces, scanCloze } from './lib/cloze.js'
 import { buildCardsHtml, buildPrintHtml, fieldsToHtml, measureOverflow, openFile, renderPdf, renderPng, renderTemplate, splitFields } from './lib/preview.js'
 import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readPackageSchemeRecord, readSchemeBody, readTemplate, refreshSchemeAssets, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
@@ -486,13 +486,14 @@ export function apply(ctx, config = {}) {
       '一批待生产的题。open 建批，put 录入或补字段，validate 跑方案规则并查重（判重问 Anki），'
       + 'next 取下一道待办，mark 记结果，status 看全批。台账在数据目录，不进包也不进 Anki。',
     parameters: {
-      action: { type: 'string', required: true, enum: ['open', 'put', 'validate', 'next', 'mark', 'status'] },
+      action: { type: 'string', required: true, enum: ['open', 'put', 'validate', 'fix', 'next', 'mark', 'status'] },
       batch: { type: 'string', required: true, description: '批次 id（字母数字-_）' },
       title: { type: 'string', description: 'open 时的说明' },
       scheme: { type: 'string', description: 'open 时的方案 id' },
       schemeVersion: { type: 'integer', description: 'open 时钉住方案版本' },
       deck: { type: 'string', description: 'open 时的目标牌组' },
       model: { type: 'string', description: 'open 时的目标笔记模型' },
+      apply: { type: 'boolean', description: 'fix 时是否真的写回批次；默认只报告，不改数据' },
       items: {
         type: 'array',
         description: 'put 时的题目：id 必填，fields 按方案字段名给',
@@ -574,6 +575,29 @@ export function apply(ctx, config = {}) {
         const applied = upsertItems(batch, args.items ?? [])
         await saveBatch(store.root, batch)
         return { summary: summarize(batch), items: view(batch), ...applied }
+      }
+
+      if (args.action === 'fix') {
+        const changes = []
+        for (const item of batch.items) {
+          if (item.status === 'written') continue
+          const current = item.fields?.['答案'] ?? ''
+          const { text: fixed, changed } = fixClozeBraces(current)
+          if (!changed) continue
+          changes.push(item.id)
+          if (args.apply) {
+            item.fields = { ...item.fields, 答案: fixed }
+            item.updatedAt = new Date().toISOString()
+          }
+        }
+        if (args.apply && changes.length > 0) await saveBatch(store.root, batch)
+        return {
+          summary: summarize(batch),
+          items: view(batch),
+          warnings: changes.length === 0
+            ? ['没有需要修复的挖空']
+            : [`${args.apply ? '已修复' : '可修复'} ${changes.length} 题：${changes.join(', ')}（连续 }} 改为 } }）${args.apply ? '；跑一次 validate 刷新 issues' : '；加 apply=true 写回'}`],
+        }
       }
 
       if (args.action === 'validate') {
@@ -1124,6 +1148,7 @@ export function apply(ctx, config = {}) {
         '有现成方案先用现成的：scheme list → scheme get（正文、模板、实践、目录文件清单）；方案没写的部分由任务决定。',
         '想试新方法：scheme save 先存 draft，可只有正文；做几张真卡后把样卡与判据写进方案目录，scheme test 验证，确认后再 active。',
         '任务收尾时主动检查：这次的做法若值得复用，就存成 draft 方案并说明理由，不必等用户要求；没有产出的一次性任务不建方案。',
+        '遇到 cloze:BRACE 先用 batch fix（默认只报告，apply=true 才写回），再 validate；同类修复也可写进方案 scripts/。',
         '资料定位用 materials，返回的 p页:L行 可直接写进定位字段。',
         '写入先 card_write plan 给用户看，确认后 commit；commit 可 open=true 在 Anki 里打开，card_preview 可渲染预览或出 PDF。',
         '渲染后把文件交给用户：HTML/PNG/PDF 用 present 呈现，不要只说「已生成」。',

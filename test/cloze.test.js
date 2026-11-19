@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { scanCloze } from '../lib/cloze.js'
+import { fixClozeBraces, scanCloze } from '../lib/cloze.js'
 
 const okCard = '{{c1::<ol><li>闭区域 \\(D\\) 由分段光滑曲线围成</li></ol>}}'
 
@@ -21,4 +21,21 @@ test('^{\mathrm{T}} 造成的连续 }} 会被拦下', () => {
 test('未闭合的挖空单独报', () => {
   const codes = scanCloze('{{c1::只有开头').map((issue) => issue.code)
   assert.deepEqual(codes, ['UNCLOSED'])
+})
+
+test('fixClozeBraces 把内部 }} 改成 } }，保留结尾', () => {
+  const broken = '{{c1::取 \\(v=[\\,1\\ 2\\,]^{\\mathrm{T}}\\) 两组}}'
+  const { text, changed } = fixClozeBraces(broken)
+  assert.equal(changed, true)
+  assert.match(text, /\\mathrm\{T\} \}/)
+  assert.match(text, /\}\}$/)
+  const codes = scanCloze(text).map((issue) => issue.code)
+  assert.equal(codes.length, 0, `修复后不应再有挖空问题，实际 ${codes.join(',')}`)
+})
+
+test('fixClozeBraces 对正常卡不改动', () => {
+  const ok = '{{c1::<ol><li>条件一</li></ol>}}'
+  const { text, changed } = fixClozeBraces(ok)
+  assert.equal(changed, false)
+  assert.equal(text, ok)
 })

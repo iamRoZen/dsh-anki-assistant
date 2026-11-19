@@ -52,7 +52,7 @@ anki-assistant/
 |---|---|
 | `scheme` | 方案库：`list` / `get`（正文、模板、实践、目录文件清单） / `save`（永远写新版本） / `import`（导入外来目录，自动规范 id） / `test`（跑方案自带测试或样卡） |
 | `practice` | 实践库：按方案/模块/标签筛选，读全文 |
-| `batch` | 批次：`open` / `put` / `validate` / `next` / `mark` / `status` |
+| `batch` | 批次：`open` / `put` / `validate` / `fix`（修复挖空截断） / `next` / `mark` / `status` |
 | `materials` | 读资料并给行号：PDF 按页重建行，可按关键词只取命中行 |
 | `card_write` | 写入闸门：`plan`（add/update） / `commit`（幂等，可 `open=true` 在 Anki 打开） / `verify`（按快照回读） |
 | `card_preview` | 渲染预览：`png`、`split`（逐张）、`pdf`（A4）、`measure`（溢出检测） |
