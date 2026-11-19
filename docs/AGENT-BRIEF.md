@@ -58,6 +58,7 @@ batch open    { action:'open', batch:'demo', scheme:'qac-memory', deck:'药理�
 batch put     { action:'put', batch:'demo', items:[{ id:'d1', fields:{
                 问题:'哌唑嗪首剂为什么安排在睡前？',
                 章节定位:'药理学（第10版） ‖ 第五章 ‖ 哌唑嗪',
+                要点数:'30字',            // 答案可见字数，按实际内容算；示例答案实算为 30 字
                 答案:'{{c1::首剂晕厥（直立性低血压）→ 0.5mg 睡前 + 卧床数小时}}',
                 笔记:'0.5mg / 睡前 / 卧床',
                 引用:'药理学（第10版） ‖ p120:L6-9'
@@ -144,5 +145,5 @@ blocked  failed/parked
 
 ## 10. 版本
 
-- 插件 `0.8.1`；DSH `0.2.2-rc.3`；Node `>=22.19`；`npm test` 104/104。
+- 插件 `0.8.1`；DSH `>=0.2.2-rc.3 <0.3.0`；Node `>=22.19`；`npm test` 104/104。
 - 方案格式见 [SCHEME-FORMAT.md](SCHEME-FORMAT.md)，设计取舍见 [DETAIL.md](DETAIL.md)。
