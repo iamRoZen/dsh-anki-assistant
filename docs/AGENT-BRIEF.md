@@ -143,7 +143,22 @@ blocked  failed/parked
 3. 删除方案前确认没有 Agent 正在 `batch open`。
 4. 需要并行时：只读操作（get/list/notesInfo/preview）可并行，写入串行。
 
-## 10. 版本
+## 10. 子 Agent 协作
+
+已验证：子 Agent 继承父会话的**同一套工具与 persona**（`scheme`、`materials`、`card_write` 都有）。所以能力不是问题，"谁写"才是问题。
+
+适用：多章 / >20 张 / 顺序做要一小时以上。按节拆，3–4 个并行。
+
+派发时必须写清：
+
+- 方案 `id@version`、本节页码范围、字段规范（或让它 `scheme get`）；
+- 只交候选卡：字段 + 出处 `p页:L行` + 不确定的点；
+- **禁止** `batch` / `card_write` / `scheme save|delete`，不要写 Anki；
+- 主 Agent 收口：合并去重 → `batch put` → `validate` → `plan` → `commit` → `verify` → `present`。
+
+子 Agent 继承工具也意味着它**能**误写。协议靠提示词，没有硬隔离；如果以后要硬隔离，得给子 Agent 单独挂收窄的 preset。
+
+## 11. 版本
 
 - 插件 `0.8.1`；DSH `>=0.2.2-rc.3 <0.3.0`；Node `>=22.19`；`npm test` 104/104。
 - 方案格式见 [SCHEME-FORMAT.md](SCHEME-FORMAT.md)，设计取舍见 [DETAIL.md](DETAIL.md)。

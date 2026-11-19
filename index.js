@@ -1258,6 +1258,7 @@ export function apply(ctx, config = {}) {
         '验收分两层：测试通过只是工程层；每次改动后至少从真实笔记渲染一张卡 present 给用户看，才算用户层。Anki 没开就说明，并用最近一次渲染代替。',
         '看图或 measure 发现问题：改字段 → 重新 plan/commit → 重新 card_preview，再呈现修正后的版本；不要只解释错误。',
         '改了草稿、方案版本或目标，旧计划自动作废，需要重新 plan。',
+        '大任务可按节拆子 Agent：子 Agent 只读、只交候选卡与出处；开批次、plan、commit、删除必须回主 Agent。',
         '删除要谨慎：scheme / practice / card_write 都需 confirm=true；active 方案需 force=true；批次仍钉着方案时拒绝删除。',
         index.length ? `现有方案：\n${index.slice(0, 15).join('\n')}` : '现有方案：无（用 scheme save 建档）',
       ].join('\n')

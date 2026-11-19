@@ -81,6 +81,17 @@
 - Anki 卡：`card_write delete notes=[…] confirm=true`；删除前读一次、删除后再读一次核对，审计留痕。
 - 删除不可恢复：先确认对象、数量与影响，再执行。
 
+## 大任务：按节拆子 Agent
+
+量足够大时（多章 / 超过 20 张 / 单 Agent 顺序做要一小时以上）按节拆分。子 Agent 继承同一套工具和 persona，所以**必须在派发时明确收窄任务**：
+
+- 子 Agent 只读：给方案 `id@version`、本节页码范围、字段规范；
+- 只交候选卡：字段 JSON + 出处 `p页:L行` + 不确定的点，不写 Anki、不开批次、不改方案；
+- 主 Agent 收口：合并去重 → `batch put` → `validate` → `plan` → `commit` → `verify` → `present`；
+- 子 Agent 数量控制在 3–4 个，多了合并和复核会吃掉收益。
+
+派发提示里必须写一句：**不要调用 `batch`、`card_write`、`scheme save/delete`；不要写 Anki；只返回候选卡与出处。**
+
 ## 工具只做确定性的事
 
 `materials` 取原文与行号；`batch` 排队；`card_write` 预览/写入/回读；`practice` 看案例。
