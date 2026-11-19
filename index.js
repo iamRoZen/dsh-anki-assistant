@@ -21,7 +21,7 @@ import {
 } from './lib/batch.js'
 import { buildPlan, commitPlan, loadCommit, loadPlan, verifyCommitted, WriteError } from './lib/write.js'
 import { findLines, readMaterial } from './lib/materials.js'
-import { fixClozeBraces, scanCloze } from './lib/cloze.js'
+import { clozeFieldName, fixClozeBraces, scanCloze } from './lib/cloze.js'
 import { buildCardsHtml, buildPrintHtml, fieldsToHtml, measureOverflow, openFile, renderPdf, renderPng, renderTemplate, splitFields } from './lib/preview.js'
 import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetSchemeJson, readPackageSchemeRecord, readSchemeBody, readTemplate, refreshSchemeAssets, schemeBodyPath, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
 import { evaluate } from './lib/rules.js'
@@ -578,15 +578,25 @@ export function apply(ctx, config = {}) {
       }
 
       if (args.action === 'fix') {
+        const scheme = await getScheme(store.root, batch.scheme.id, batch.scheme.version)
+        if (!scheme) throw new Error(`批次钉住的方案 ${batch.scheme.id}@${batch.scheme.version} 读不到`)
+        const clozeField = clozeFieldName(scheme)
+        if (!clozeField) {
+          return {
+            summary: summarize(batch),
+            items: view(batch),
+            warnings: ['本方案没有可识别的挖空字段（role=content 或名为「答案」），不自动修复'],
+          }
+        }
         const changes = []
         for (const item of batch.items) {
           if (item.status === 'written') continue
-          const current = item.fields?.['答案'] ?? ''
+          const current = item.fields?.[clozeField] ?? ''
           const { text: fixed, changed } = fixClozeBraces(current)
           if (!changed) continue
           changes.push(item.id)
           if (args.apply) {
-            item.fields = { ...item.fields, 答案: fixed }
+            item.fields = { ...item.fields, [clozeField]: fixed }
             item.updatedAt = new Date().toISOString()
           }
         }
@@ -621,13 +631,14 @@ export function apply(ctx, config = {}) {
           const fields = Object.fromEntries(
             scheme.output.fields.map((field) => [field.name, item.fields?.[field.name] ?? '']),
           )
+          const clozeField = clozeFieldName(scheme)
           const issues = [
             ...evaluate(fields, scheme.quality?.rules),
-            ...scanCloze(fields['答案']).map((issue) => ({
+            ...(clozeField ? scanCloze(fields[clozeField]).map((issue) => ({
               ruleId: `cloze:${issue.code}`,
-              field: '答案',
+              field: clozeField,
               message: issue.message,
-            })),
+            })) : []),
           ]
           if (legacyValidator) {
             let verdict

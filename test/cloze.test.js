@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { fixClozeBraces, scanCloze } from '../lib/cloze.js'
+import { clozeFieldName, fixClozeBraces, scanCloze } from '../lib/cloze.js'
 
 const okCard = '{{c1::<ol><li>闭区域 \\(D\\) 由分段光滑曲线围成</li></ol>}}'
 
@@ -38,4 +38,17 @@ test('fixClozeBraces 对正常卡不改动', () => {
   const { text, changed } = fixClozeBraces(ok)
   assert.equal(changed, false)
   assert.equal(text, ok)
+})
+
+test('挖空字段由方案决定，不写死「答案」', () => {
+  assert.equal(clozeFieldName({
+    output: { fields: [{ name: '问题', role: 'content' }, { name: '解答', role: 'content' }] },
+  }), '解答')
+  assert.equal(clozeFieldName({
+    output: { fields: [{ name: '问题' }, { name: '答案' }] },
+  }), '答案')
+  assert.equal(clozeFieldName({
+    output: { fields: [{ name: '问题' }, { name: '要点', spec: '写挖空答案' }] },
+  }), '要点')
+  assert.equal(clozeFieldName({ output: { fields: [{ name: '问题' }] } }), null)
 })
