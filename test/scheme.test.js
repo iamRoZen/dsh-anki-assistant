@@ -107,3 +107,14 @@ test('损坏的方案文件被隔离，不再阻塞其他方案', async () => {
   const files = await readdir(join(root, 'schemes', 'demo-scheme'))
   assert.equal(files.some((name) => name.includes('.corrupt-')), true)
 })
+
+test('并发保存同一方案会得到不同版本号', async () => {
+  const root = await tempDir('anki-as-scheme-')
+  const [a, b] = await Promise.all([
+    saveScheme(root, { id: 'race', title: 'A', status: 'draft', changeWhy: 'a' }),
+    saveScheme(root, { id: 'race', title: 'B', status: 'draft', changeWhy: 'b' }),
+  ])
+  assert.notEqual(a.version, b.version)
+  const files = await readdir(join(root, 'schemes', 'race'))
+  assert.equal(files.filter((name) => /^v\d+\.json$/.test(name)).length, 2)
+})

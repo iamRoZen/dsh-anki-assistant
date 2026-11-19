@@ -9,7 +9,18 @@
 - 你写卡，AnkiConnect 落卡；方案决定方法，工具只做确定性的事。
 - 数据目录：`%USERPROFILE%\.dsh\anki-assistant`（下称 `<dataDir>`），与安装包严格分开。
 
-## 1. 开工检查
+## 1. 安装与自检（新机器）
+
+```bash
+npm install --omit=dev
+dsh plugin install --profile desktop .     # 或在 GUI 插件管理里安装本目录
+```
+
+- 链接安装：改源码后**重启 Desktop** 才加载新代码，不用重装。
+- 自检四步：`npm test` 应 103/103；新会话能选「Anki Assistant」；`scheme list` 看得到种子方案；`card_preview` 能出图。
+- preset 不出现时依次查：profile `package.json` 里有没有 `link:`；`node_modules` 是不是 junction；`package.json` 是否带 UTF-8 BOM。
+
+## 2. 开工检查
 
 1. `card_preview` 或任何 Anki 调用能否连通？连不上先确认 Anki 已启动、AnkiConnect 已装。
 2. `scheme list` 看有没有现成方案；有就 `scheme get`，别自己发明。
@@ -32,7 +43,29 @@
 - **一批卡**：`batch open` → `put` → `validate` → 修到 0 issue → `plan`（给用户看）→ `commit` → `verify` → `card_preview` 呈现。
 - **只交文档**（问题集 / 答案 / 记忆指导）：不用 batch，按方案正文产出，`practice save` 记录一次运行。
 
-## 4. 批次状态机
+## 4. 一次真实演练
+
+```
+scheme get id=qac-math
+  → 正文 + 字段 + 样卡 + 目录文件清单
+
+batch open batch=demo scheme=qac-math deck=线代 model="QAC 问答挖空 v4（国标引用）"
+batch put items=[{id:'d1', fields:{问题:'线性组合的定义',答案:'{{c1::…}}'}}]
+batch validate
+  → ready 1 / blocked 0；issues=[]
+
+card_write plan batch=demo mode=add
+  → 计划 p-xxxx｜可写 1 / 受阻 0｜（逐题列出）
+card_write commit plan=p-xxxx
+  → 成功 1 / 失败 0
+card_write verify plan=p-xxxx
+  → 回读 1 张，异常 0 处
+
+card_preview batch=demo png=true measure=true
+  → PNG 路径 + 「无横向溢出」；present 给用户
+```
+
+## 5. 批次状态机
 
 ```
 queued → ready → written
@@ -74,11 +107,36 @@ blocked  failed/parked
 ## 8. 不要做
 
 - 不要手改 `<dataDir>` 里的批次 / 计划 / 审计文件；用工具。
+- 不要在 `%TEMP%` 建长期沙箱：要用临时目录就自建自删，或直接用 `<dataDir>/previews`。
 - 不要跳过 `plan` 直接 `commit`；不要为通过检查改断言。
 - 不要把"生成成功 / 校验通过 / 写入成功"当成学习效果成立。
 - 不要把用户数据塞进安装包或提交进 git。
 
-## 9. 版本
+## 9. 并发与所有权
+
+**结论：不是并发安全的。** 单个文件是原子写（临时文件 + 改名），但"读 → 改 → 写"没有锁，两个写入者会互相覆盖。
+
+| 链路 | 能否并发 | 说明 |
+|---|---|---|
+| `scheme list/get` | ✅ | 只读 |
+| `scheme save` | ⚠️ 部分 | 版本号用独占创建，两个保存会得到 vN 与 vN+1，都保留；`active.json` 指针后写者胜 |
+| `scheme delete` | ❌ | 与 `batch open` 存在竞态：删除前会查批次，但查完到删除之间别人可能新建批次 |
+| `batch open/put/validate/fix/mark` | ❌ | 读改写同一 JSON，后写覆盖前写 |
+| `card_write plan` | ✅ | 计划 id 唯一；批次变了旧计划会自动失效 |
+| `card_write commit` | ❌ | 并发提交同一批次可能重复写卡；标签只能事后补，不能当锁 |
+| `practice save/delete` | ❌ | 索引是读改写，会丢条目 |
+| `card_preview` | ✅ | 每次独立 Edge profile + 唯一文件名 |
+| `materials` | ✅ | 只读 |
+| `audit` 追加 | ✅ 基本安全 | 单行追加，交错时行不会混在一起 |
+
+必须遵守的规则：
+
+1. **一个数据目录同一时间只允许一个写入者**；分发时按批次或方案划分归属。
+2. **不要两个 Agent 同时 commit 同一批次**。
+3. 删除方案前确认没有 Agent 正在 `batch open`。
+4. 需要并行时：只读操作（get/list/notesInfo/preview）可并行，写入串行。
+
+## 10. 版本
 
 - 插件 `0.7.2`；DSH `0.2.2-rc.3`；Node `>=22.19`。
 - 方案格式见 [SCHEME-FORMAT.md](SCHEME-FORMAT.md)，设计取舍见 [DETAIL.md](DETAIL.md)。
