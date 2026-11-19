@@ -1,9 +1,27 @@
 {
   "name": "dsh-anki-assistant",
-  "version": "0.7.5",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "Anki Assistant：方案驱动的制卡助手，含方案库、批次台账、写入闸门与资料读取。",
+  "license": "MIT",
+  "author": "Anki Assistant contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamRoZen/anki-assistant.git"
+  },
+  "homepage": "https://github.com/iamRoZen/anki-assistant#readme",
+  "bugs": {
+    "url": "https://github.com/iamRoZen/anki-assistant/issues"
+  },
+  "keywords": [
+    "anki",
+    "anki-connect",
+    "flashcards",
+    "dsh",
+    "deepseek-harness",
+    "plugin"
+  ],
   "main": "index.js",
   "exports": {
     ".": "./index.js",
@@ -17,9 +35,11 @@
     "assets/",
     "locale/",
     "docs/",
+    "scripts/",
     "icon.svg",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "node --test \"test/*.test.js\"",

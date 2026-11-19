@@ -1,0 +1,8 @@
+# 不进 npm 包的内容（files 白名单之外再排除）
+**/__pycache__/
+**/*.pyc
+dist/
+/test/
+node_modules/
+*.log
+*.tgz

@@ -15,7 +15,7 @@
 | `vendor/tools/__init__.py` | 新增空包文件（上游是隐式命名空间包） | — | 2026-11-18 |
 
 上游绝对路径（本机取证用，**运行时不需要**）：
-`D:\Users\lsz\Documents\ChatGPT\Anki制卡\dsh-anki-cards\vendor\anki-cards\`
+`<旧仓库路径>\dsh-anki-cards\vendor\anki-cards\`
 
 ## 改动清单
 

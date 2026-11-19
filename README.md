@@ -111,6 +111,8 @@ anki-assistant/
 
 安装后在**新会话**里选 Preset「Anki Assistant」；工具、技能与提示词都挂在 preset 下，其他会话不受影响。
 
+打包：`npm pack` 生成 tarball（含 `lib/`、`assets/`、`docs/`、`scripts/`、`LICENSE`，不含 `test/`、`dist/`、`__pycache__`）。要发布到 npm 需先去掉 `package.json` 里的 `"private": true`。
+
 ## 测试
 
 ```bash
