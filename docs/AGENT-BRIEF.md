@@ -123,7 +123,7 @@ blocked  failed/parked
 | `scheme delete` | ❌ | 与 `batch open` 存在竞态：删除前会查批次，但查完到删除之间别人可能新建批次 |
 | `batch open/put/validate/fix/mark` | ❌ | 读改写同一 JSON，后写覆盖前写 |
 | `card_write plan` | ✅ | 计划 id 唯一；批次变了旧计划会自动失效 |
-| `card_write commit` | ❌ | 并发提交同一批次可能重复写卡；标签只能事后补，不能当锁 |
+| `card_write commit` | ⚠️ 同批次串行 | 同一批次加提交锁：第二个会等锁，且旧计划会因批次变化失效；不同批次可并行 |
 | `practice save/delete` | ❌ | 索引是读改写，会丢条目 |
 | `card_preview` | ✅ | 每次独立 Edge profile + 唯一文件名 |
 | `materials` | ✅ | 只读 |
