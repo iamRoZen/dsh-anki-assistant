@@ -17,7 +17,7 @@ dsh plugin install --profile desktop .     # 或在 GUI 插件管理里安装本
 ```
 
 - 链接安装：改源码后**重启 Desktop** 才加载新代码，不用重装。
-- 自检四步：`npm test` 应 103/103；新会话能选「Anki Assistant」；`scheme list` 看得到种子方案；`card_preview` 能出图。
+- 自检四步：`npm test` 应 104/104；新会话能选「Anki Assistant」；`scheme list` 看得到种子方案；`card_preview` 能出图。
 - preset 不出现时依次查：profile `package.json` 里有没有 `link:`；`node_modules` 是不是 junction；`package.json` 是否带 UTF-8 BOM。
 
 ## 2. 开工检查
@@ -28,41 +28,46 @@ dsh plugin install --profile desktop .     # 或在 GUI 插件管理里安装本
 
 ## 2. 工具契约
 
+下面的 `scheme get id=…` 是**简写**；真实参数是对象，例如 `{ action: 'get', id: 'qac-memory' }`，`card_preview` 没有 action，靠参数组合。
+
 | 工具 | 动作 | 关键参数 | 返回/语义 |
 |---|---|---|---|
 | `scheme` | list / get / save / import / test / delete | get/save: `id`；save: `scheme` + `body` + 可选 `files`；test: `id`；delete: `confirm`（active 需 `force`） | save 永远出新版本；delete 被批次钉住时拒绝 |
 | `practice` | list / get / save / delete | save: `id`、`body`、`scheme`、`schemeVersion`、`modules`、`tags`；delete: `confirm` | 实践是真实运行记录，不是方案 |
 | `batch` | open / put / validate / fix / next / mark / status | open: `batch`、`scheme`、`deck`、`model`；put: `items`；fix: `apply` | 批次台账在 `<dataDir>/batches` |
-| `materials` | read / find | 文件路径；find 关键词 | 返回 `p页:L行`，可直接写进定位字段 |
+| `materials` | **没有 action**：给 `path` 读，给 `keyword` 只返回命中行 | `path`、`pages`、`keyword` | 返回 `p页:L行`，可直接写进定位字段 |
 | `card_write` | plan / commit / verify / delete | plan: `batch`、`mode`；commit: `plan`、`open`；delete: `notes`、`confirm` | 只写 ready；commit 幂等；verify 对照快照 |
-| `card_preview` | 渲染 | `batch`/`plan`/`notes`；`png`、`split`、`pdf`、`pdfStyle`、`measure`、`open` | 产出 HTML/PNG/PDF；`measure` 报横向溢出 |
+| `card_preview` | **没有 action**：参数组合 | `batch`/`plan`/`notes`；`png`、`split`、`pdf`、`pdfStyle`、`measure`、`open` | 产出 HTML/PNG/PDF；`measure` 报横向溢出 |
 
 ## 3. 一次任务的默认路径
 
-- **单张卡 / 小改**：`scheme get` → 写字段 → `card_write plan` → 给用户看 → `commit` → `verify`。
+- **单张卡 / 小改**：也要先建一个只放 1 题的批次（`plan` 必须有批次，这是硬要求）：
+  `batch open` → `batch put` → `card_write plan` → 给用户看 → `commit` → `verify`。
 - **一批卡**：`batch open` → `put` → `validate` → 修到 0 issue → `plan`（给用户看）→ `commit` → `verify` → `card_preview` 呈现。
 - **只交文档**（问题集 / 答案 / 记忆指导）：不用 batch，按方案正文产出，`practice save` 记录一次运行。
 
-## 4. 一次真实演练
+## 4. 一次真实演练（参数是对象，不是命令行）
+
+以 `qac-memory` 为例（模型与牌组来自 `scheme get` 的返回和用户环境；这里假设模型是 `QAC 问答挖空 v4（国标引用）`）：
 
 ```
-scheme get id=qac-math
-  → 正文 + 字段 + 样卡 + 目录文件清单
+scheme get    { action:'get', id:'qac-memory' }
+  → 六字段（问题/章节定位/要点数/答案/笔记/引用）+ 模型名 + 模板 + 实践
 
-batch open batch=demo scheme=qac-math deck=线代 model="QAC 问答挖空 v4（国标引用）"
-batch put items=[{id:'d1', fields:{问题:'线性组合的定义',答案:'{{c1::…}}'}}]
-batch validate
-  → ready 1 / blocked 0；issues=[]
-
-card_write plan batch=demo mode=add
-  → 计划 p-xxxx｜可写 1 / 受阻 0｜（逐题列出）
-card_write commit plan=p-xxxx
-  → 成功 1 / 失败 0
-card_write verify plan=p-xxxx
-  → 回读 1 张，异常 0 处
-
-card_preview batch=demo png=true measure=true
-  → PNG 路径 + 「无横向溢出」；present 给用户
+batch open    { action:'open', batch:'demo', scheme:'qac-memory', deck:'药理学', model:'QAC 问答挖空 v4（国标引用）' }
+batch put     { action:'put', batch:'demo', items:[{ id:'d1', fields:{
+                问题:'哌唑嗪首剂为什么安排在睡前？',
+                章节定位:'药理学（第10版） ‖ 第五章 ‖ 哌唑嗪',
+                答案:'{{c1::首剂晕厥（直立性低血压）→ 0.5mg 睡前 + 卧床数小时}}',
+                笔记:'0.5mg / 睡前 / 卧床',
+                引用:'药理学（第10版） ‖ p120:L6-9'
+              }}] }
+batch validate { action:'validate', batch:'demo' }        → ready 1 / blocked 0
+card_write plan   { action:'plan', batch:'demo', mode:'add' }   → 计划 p-xxxx
+card_write commit { action:'commit', plan:'p-xxxx' }            → 成功 1 / 失败 0
+card_write verify { action:'verify', plan:'p-xxxx' }            → 回读 1 张，异常 0 处
+card_preview      { batch:'demo', png:true, measure:true }      → PNG 路径 + 「无横向溢出」
+present（把 PNG/HTML 交给用户）
 ```
 
 ## 5. 批次状态机
@@ -94,7 +99,8 @@ blocked  failed/parked
 | Python 缺失（`旧判据未执行`） | 该方案的 Python 判据跑不了，明确报告，不降级为 JS 通过 |
 | 没有 Edge | `card_preview` 只出 HTML，不出 PNG/PDF |
 | 模型字段对不上 | `plan` 会报缺哪个字段，先建模型或换模型 |
-| `cloze:BRACE` / `cloze:TAIL` | `batch fix` → `apply=true` → 重新 `validate` |
+| `cloze:BRACE` | `batch fix` → `apply=true` → 重新 `validate`（只修挖空内部的 `}}`） |
+| `cloze:TAIL` / `UNCLOSED` | `batch fix` **不会修**：TAIL 要删掉 `}}` 之后的尾巴，UNCLOSED 要补闭合；手工改完再 `validate` |
 | 计划失效 | 重新 `plan`，不要手改 plan 文件 |
 | 输出太长 | 只给摘要 + 文件路径，细节放预览里 |
 
@@ -138,5 +144,5 @@ blocked  failed/parked
 
 ## 10. 版本
 
-- 插件 `0.7.2`；DSH `0.2.2-rc.3`；Node `>=22.19`。
+- 插件 `0.8.1`；DSH `0.2.2-rc.3`；Node `>=22.19`；`npm test` 104/104。
 - 方案格式见 [SCHEME-FORMAT.md](SCHEME-FORMAT.md)，设计取舍见 [DETAIL.md](DETAIL.md)。
