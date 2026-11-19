@@ -59,7 +59,7 @@ anki-assistant/
 
 ## 方案接口
 
-方案是数据记录 + 方案目录里的文件，不是插件代码。
+方案是数据记录 + 方案目录里的文件，不是插件代码。完整目录约定与写作顺序见 [docs/SCHEME-FORMAT.md](docs/SCHEME-FORMAT.md)。
 
 - `scheme.json`：`id`、`status`、`deliverable`、`output.model` / `output.fields`、`quality.rules`、`quality.validator|legacy`、`revision`
 - `body.md`：做法正文，`scheme get` 原样返回；方案目录里的 `body.v<N>.md` 是历史快照

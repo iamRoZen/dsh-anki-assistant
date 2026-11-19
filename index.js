@@ -4,10 +4,10 @@
  * 这一层只做两件事：把数据层的确定性操作暴露成工具，并把"什么时候该用哪一层"
  * 写进提示词。它不产出步骤序列——顺序由 Agent 决定。
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -26,6 +26,24 @@ import { getPracticeSync, listPracticesSync, practicesForScheme, readAssetScheme
 import { evaluate } from './lib/rules.js'
 
 const PROVIDER = 'anki-assistant'
+/** 方案目录文件清单：让 Agent 知道除了正文还有什么（脚本、样卡、截图、笔记）。 */
+function schemeFiles(root, id) {
+  const dir = join(root, 'schemes', id)
+  if (!existsSync(dir)) return []
+  const out = []
+  const walk = (base, prefix) => {
+    for (const entry of readdirSync(base, { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue
+      const full = join(base, entry.name)
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name
+      if (entry.isDirectory()) walk(full, relative)
+      else out.push({ path: relative, size: statSync(full).size })
+    }
+  }
+  walk(dir, '')
+  return out.sort((a, b) => a.path.localeCompare(b.path))
+}
+
 const ASSETS = fileURLToPath(new URL('./assets/', import.meta.url))
 const SKILL_FILE = new URL('./assets/skills/anki-assistant.md', import.meta.url)
 
@@ -211,6 +229,18 @@ export function apply(ctx, config = {}) {
       version: { type: 'integer', description: '版本号，缺省取当前 active' },
       scheme: { type: 'object', additionalProperties: true, description: 'save 时的方案对象（除 id/title/status 外都可省略）' },
       body: { type: 'string', description: 'save 时的方案正文（Markdown，可原样贴入网上的自然语言提示词）' },
+      files: {
+        type: 'array',
+        description: 'save 时随方案写入的附件（样卡、脚本、笔记、样式等），路径相对方案目录',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            path: { type: 'string', description: '相对路径，如 samples/pass.json、scripts/check.mjs、notes/经验.md（必填）' },
+            content: { type: 'string', description: '文件内容（文本，必填）' },
+          },
+        },
+      },
       changeWhy: { type: 'string', description: 'save 时说明这次改了什么、为什么' },
       includeDrafts: { type: 'boolean', description: 'list 时是否包含 draft 方案，默认 false' },
       query: { type: 'string', description: 'list 时按 id / 标题 / 正文关键词过滤' },
@@ -258,6 +288,11 @@ export function apply(ctx, config = {}) {
           if (value.scheme.templateBody) {
             lines.push('', '--- 卡片模板 ---', String(value.scheme.templateBody).slice(0, 8000))
           }
+          if (value.scheme.files?.length) {
+            const shown = value.scheme.files.slice(0, 40).map((file) => `  ${file.path}（${Math.max(1, Math.round(file.size / 1024))} KB）`)
+            lines.push('', `--- 方案目录文件（${value.scheme.files.length} 个，按需读取）---`, ...shown)
+            if (value.scheme.files.length > 40) lines.push(`  … 还有 ${value.scheme.files.length - 40} 个`)
+          }
           return text(lines.join('\n'))
         }
         return text((value.schemes ?? [])
@@ -291,6 +326,7 @@ export function apply(ctx, config = {}) {
             bodyPath: schemeBodyPath(store.root, scheme.id),
             templateBody: readTemplate(store.root, scheme.output?.template),
             practices: practicesForScheme(store.root, scheme.id),
+            files: schemeFiles(store.root, scheme.id),
           },
         }
       }
@@ -304,7 +340,18 @@ export function apply(ctx, config = {}) {
       if (typeof args.body === 'string') writeFileSync(join(dir, 'body.md'), args.body, 'utf8')
       const bodyFile = join(dir, 'body.md')
       if (existsSync(bodyFile)) copyFileSync(bodyFile, join(dir, `body.v${saved.version}.md`))
-      return { scheme: saved }
+      const written = []
+      for (const file of args.files ?? []) {
+        if (!file?.path || typeof file.content !== 'string') throw new Error('files 每项需要 path 与 content')
+        if (file.path.includes('..') || file.path.startsWith('/') || file.path.startsWith('\\') || /^[a-zA-Z]:/.test(file.path)) {
+          throw new Error(`非法附件路径：${file.path}`)
+        }
+        const target = join(dir, file.path)
+        mkdirSync(dirname(target), { recursive: true })
+        writeFileSync(target, file.content, 'utf8')
+        written.push(file.path)
+      }
+      return { scheme: saved, ...(written.length ? { files: written } : {}) }
     },
   }))
 

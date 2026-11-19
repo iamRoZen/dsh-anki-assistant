@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 激活测试：不启动 DSH，直接 apply 一遍，确认四个工具、skill 与提示词段都注册成功。
  * 依赖本地 node_modules 里的 dsh-tools 形状桩（不进发布包）。
  */
@@ -41,6 +41,52 @@ async function mount() {
 test('注册六个工具，名字稳定', async () => {
   const { tools } = await mount()
   assert.deepEqual([...tools.keys()].sort(), ['batch', 'card_preview', 'card_write', 'materials', 'practice', 'scheme'])
+})
+
+test('scheme save 可带附件，scheme get 返回方案目录清单', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  await scheme.execute({
+    action: 'save',
+    id: 'attach-test',
+    scheme: {
+      id: 'attach-test',
+      title: '附件测试',
+      status: 'draft',
+      deliverable: 'cards',
+      output: { model: 'M', fields: [{ name: '问题', spec: '有主语的问题' }] },
+    },
+    body: '# 正文',
+    changeWhy: '测试附件',
+    files: [
+      { path: 'samples/pass.json', content: '{}' },
+      { path: 'notes/经验.md', content: '# 经验' },
+    ],
+  }, {})
+  const got = await scheme.execute({ action: 'get', id: 'attach-test' }, {})
+  const paths = got.scheme.files.map((file) => file.path)
+  assert.equal(paths.includes('samples/pass.json'), true)
+  assert.equal(paths.includes('notes/经验.md'), true)
+  assert.equal(paths.includes('body.md'), true)
+})
+
+test('scheme save 拒绝越界附件路径', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  await assert.rejects(() => scheme.execute({
+    action: 'save',
+    id: 'escape-test',
+    scheme: {
+      id: 'escape-test',
+      title: '越界测试',
+      status: 'draft',
+      deliverable: 'cards',
+      output: { model: 'M', fields: [{ name: '问题', spec: '有主语的问题' }] },
+    },
+    body: '',
+    changeWhy: '测试越界',
+    files: [{ path: '../evil.md', content: 'x' }],
+  }, {}), /非法附件路径/)
 })
 
 test('每个工具都有参数、输出 schema 与 render', async () => {
