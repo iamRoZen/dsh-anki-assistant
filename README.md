@@ -128,7 +128,7 @@ scripts/            体检脚本（audit-schemes、check-workspace、verify-pack
 
 ## 安装包里有什么
 
-`npm pack` 生成的文件（42 个，压缩约 82 kB）：
+`npm pack` 生成的文件（42 个，压缩约 80 kB）：
 
 ```
 index.js  lib/  assets/  docs/  scripts/  locale/  icon.svg  cordis.patch.yml
