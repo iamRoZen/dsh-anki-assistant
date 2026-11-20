@@ -146,6 +146,18 @@ npm run clean:temp -- --apply --older-than=24       # 删除 24 小时前的
 
 测试与模拟脚本会在退出时清掉自建的临时目录；历史残留用 `clean:temp` 处理，只匹配 `anki-*`、`HeadlessEdge*`、`sim-*`。
 
+## 代码结构
+
+```
+index.js            装配：settings / store / anki / boot / skill / 提示词，只接线
+lib/tools/          7 个工具：scheme、project、practice、batch、materials、card_write、card_preview
+lib/                领域层：scheme、batch、write、preview、anki、materials、store、library、project
+assets/             种子：schemes/、skills/、print/、practices/
+docs/               执行手册、方案格式、设计取舍、迁移
+scripts/            体检与清理脚本（不参与运行时）
+test/               根测试；方案自带测试在各自目录
+```
+
 ## 相关工作
 
 - [执行 Agent 手册](docs/AGENT-BRIEF.md)：开工检查、工具契约、批次状态机、失败手册、并发约定

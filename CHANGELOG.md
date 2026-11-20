@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.0
+
+- 结构重构：`index.js` 从 1542 行降到 262 行，只留装配
+- 7 个工具拆到 `lib/tools/`，辅助放 `lib/tools/shared.js`
+- 行为、文案、参数、注册顺序逐字保持不变；测试 112/112
+
 ## 0.9.5
 
 - `card_preview` 支持 `scheme` + `sample`：按方案模型的真实模板渲染样卡，产物落到 `samples/render/`
