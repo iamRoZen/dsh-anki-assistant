@@ -3,7 +3,7 @@
  * 用临时数据 + 模拟 Anki，不连真实库、不写 Anki。
  *
  * 由仓库根的 test 调用（见 test/scheme-induction.test.js），也可单独：
- *   ANKI_ASSISTANT_PACKAGE=<插件包根> node assets/schemes/medical-qac-2026/test/entry.mjs
+ *   ANKI_ASSISTANT_PACKAGE=<插件包根> node examples/schemes/medical-qac-2026/test/entry.mjs
  *
  * 依赖：Python 3.10+（或 ANKI_ASSISTANT_PYTHON）。
  */

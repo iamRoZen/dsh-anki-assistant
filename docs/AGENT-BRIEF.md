@@ -184,5 +184,5 @@ blocked  failed/parked
 
 ## 12. 版本
 
-- 插件 `0.8.1`；DSH `>=0.2.2-rc.3 <0.3.0`；Node `>=22.19`；`npm test` 104/104。
+- 插件 `0.11.0`；DSH `>=0.2.2-rc.3 <0.3.0`；Node `>=22.19`；`npm test` 110/110。
 - 方案格式见 [SCHEME-FORMAT.md](SCHEME-FORMAT.md)，设计取舍见 [DETAIL.md](DETAIL.md)。

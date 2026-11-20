@@ -2,7 +2,7 @@
 /**
  * gaoshu-steps 自带复验入口：只依赖本目录。
  *
- *   node assets/schemes/gaoshu-steps/test/run.mjs
+ *   node examples/schemes/gaoshu-steps/test/run.mjs
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'

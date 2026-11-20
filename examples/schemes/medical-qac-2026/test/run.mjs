@@ -2,7 +2,7 @@
 /**
  * medical-qac-2026 自带复验入口：只依赖本目录，不进插件通用层。
  *
- *   node assets/schemes/medical-qac-2026/test/run.mjs
+ *   node examples/schemes/medical-qac-2026/test/run.mjs
  *   ANKI_ASSISTANT_PYTHON="python -X utf8" node test/run.mjs
  *
  * 检查三件：
