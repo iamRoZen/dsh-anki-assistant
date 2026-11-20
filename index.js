@@ -1389,7 +1389,6 @@ export function apply(ctx, config = {}) {
         '有现成方案先用现成的：scheme list → scheme get（正文、模板、实践、目录文件清单）；方案没写的部分由任务决定。',
         '想试新方法：scheme save 先存 draft，可只有正文；做几张真卡后把样卡与判据写进方案目录，scheme test 验证，确认后再 active。',
         '任务收尾时主动检查：这次的做法若值得复用，就存成 draft 方案并说明理由，不必等用户要求；没有产出的一次性任务不建方案。',
-        '遇到 cloze:BRACE 先用 batch fix（默认只报告，apply=true 才写回），再 validate；同类修复也可写进方案 scripts/。',
         '资料定位用 materials，返回的 p页:L行 可直接写进定位字段。',
         '写入先 card_write plan 给用户看，确认后 commit；commit 可 open=true 在 Anki 里打开，card_preview 可渲染预览或出 PDF。',
         '渲染后把文件交给用户：HTML/PNG/PDF 用 present 呈现，不要只说「已生成」。',
