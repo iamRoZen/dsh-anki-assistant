@@ -81,6 +81,20 @@
 - Anki 卡：`card_write delete notes=[…] confirm=true`；删除前读一次、删除后再读一次核对，审计留痕。
 - 删除不可恢复：先确认对象、数量与影响，再执行。
 
+## 方案作者：交付里必须有渲染图
+
+用 `scheme save` 或 `scheme derive` 之后，**必须**跑一次：
+
+```
+card_preview scheme=<id> sample=pass png=true
+```
+
+它按 `output.model` 的真实模板与 CSS 渲染 `samples/pass.json`，图会存到方案的
+`samples/render/pass.png`（HTML 同目录）。把这张图 `present` 给用户，没有渲染图不算交付。
+
+方案目录里没有"卡片模板文件"：模板在 Anki 的 note type 里（`modelTemplates`），
+方案只声明 `output.model` 和字段角色。要改外观就改 Anki 模型，不要在方案里伪造模板。
+
 ## 大任务：按节/批次拆子 Agent（可直接执行）
 
 量足够大时（多章 / 超过 20 张 / 单 Agent 顺序做要一小时以上）按节拆分。子 Agent 继承同一套工具和 persona，**可以直接跑完整条链**，但必须分权：

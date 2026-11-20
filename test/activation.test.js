@@ -4,14 +4,14 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { tempDir, tempDirSync } from './temp.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { apply } from '../index.js'
 
-async function mount() {
+async function mount(config = {}) {
   const tools = new Map()
   const ctx = {
     tools: {
@@ -35,7 +35,7 @@ async function mount() {
     },
   }
   const dataDir = await tempDir('anki-as-activation-')
-  apply(ctx, { dataDir })
+  apply(ctx, { dataDir, ...config })
   return { ctx, tools, dataDir }
 }
 
@@ -82,6 +82,37 @@ test('scheme save 可带附件，scheme get 返回方案目录清单', async () 
   assert.equal(paths.includes('samples/pass.json'), true)
   assert.equal(paths.includes('notes/经验.md'), true)
   assert.equal(paths.includes('body.md'), true)
+})
+
+test('card_preview 按方案样卡渲染并落到 samples/render', async () => {
+  const fakeAnki = {
+    modelFields: async () => ['问题', '答案'],
+    modelStyling: async () => ({ css: '.card{}' }),
+    modelTemplates: async () => ({ Front: '<div>{{问题}}</div>', Back: '<div>{{答案}}</div>' }),
+    notesInfo: async () => [],
+    version: async () => '6',
+  }
+  const { tools, dataDir } = await mount({ ankiClient: fakeAnki })
+  await tools.get('scheme').execute({
+    action: 'save',
+    id: 'render-test',
+    scheme: {
+      id: 'render-test',
+      title: '渲染',
+      status: 'draft',
+      deliverable: 'cards',
+      output: {
+        model: 'M',
+        fields: [{ name: '问题', spec: '问句' }, { name: '答案', spec: '答句' }],
+      },
+    },
+    body: '# 正文',
+    changeWhy: '测试渲染',
+    files: [{ path: 'samples/pass.json', content: JSON.stringify({ fields: { 问题: 'Q', 答案: 'A' } }) }],
+  }, {})
+  const out = await tools.get('card_preview').execute({ scheme: 'render-test', sample: 'pass' }, {})
+  assert.ok(out.file)
+  assert.equal(existsSync(join(dataDir, 'schemes', 'render-test', 'samples', 'render', 'pass.html')), true)
 })
 
 test('scheme save 拒绝越界附件路径', async () => {

@@ -115,6 +115,11 @@ blocked  failed/parked
 
 - 不要手改 `<dataDir>` 里的批次 / 计划 / 审计文件；用工具。
 - 不要在 `%TEMP%` 建长期沙箱：要用临时目录就自建自删，或直接用 `<dataDir>/previews`。
+- **不要写插件安装目录**：`assets/`、`lib/`、`index.js` 是随包分发的，改了会污染仓库、也会被下次升级覆盖。
+  方案改数据目录里的副本（`scheme save` 写的就是副本）；预览、导出、脚本产物都放 `<dataDir>`。
+- 派子 Agent 时把 `cwd` 指到数据目录或项目目录，不要继承插件仓库。
+- 方案保存后必须渲染样卡（`card_preview scheme=<id> sample=pass png=true`）并 `present`；
+  产物在 `samples/render/`，没有渲染图不算交付。
 - 不要跳过 `plan` 直接 `commit`；不要为通过检查改断言。
 - 不要把"生成成功 / 校验通过 / 写入成功"当成学习效果成立。
 - 不要把用户数据塞进安装包或提交进 git。

@@ -129,6 +129,18 @@
 7. `scheme save`（可带 `files` 写附件），状态先 `draft`。
 8. 用 2–3 张真实内容验证写法，确认后再批量；用户认可后转 `active`。
 
+## 样卡渲染
+
+方案不能只有 JSON 样卡。保存后用真实模型渲染一张：
+
+```
+card_preview scheme=<id> sample=pass png=true
+```
+
+- 模板与 CSS 来自 Anki 的 note type（`output.model`），**方案目录不放卡片模板文件**；
+- 渲染结果落到方案的 `samples/render/pass.png`（与 `pass.html`）；
+- 没有这张图，方案交付不算完成。
+
 ## 从外部文件起一个方案
 
 ```bash

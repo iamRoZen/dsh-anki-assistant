@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.5
+
+- `card_preview` 支持 `scheme` + `sample`：按方案模型的真实模板渲染样卡，产物落到 `samples/render/`
+- 提示词/skill：方案交付必须有渲染图；禁止写插件安装目录；子 Agent 的 cwd 指向数据目录
+- `scripts/check-workspace.mjs` + `npm run check:workspace`：检查仓库里是否有不该出现的改动/垃圾
+
 ## 0.9.4
 
 - `scheme prune`：清理旧版本，保留 active 与被批次钉住的版本；同时清掉重复的 `scheme.json`

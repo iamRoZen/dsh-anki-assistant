@@ -1055,6 +1055,9 @@ export function apply(ctx, config = {}) {
       batch: { type: 'string', description: '批次 id' },
       plan: { type: 'string', description: '计划 id（缺批次时按其批次预览）' },
       notes: { type: 'array', items: { type: 'integer' }, description: '指定 noteId，优先于批次' },
+      scheme: { type: 'string', description: '直接渲染方案样卡（不需要批次）' },
+      schemeVersion: { type: 'integer', description: 'scheme 的版本，默认 active' },
+      sample: { type: 'string', description: '样卡名，默认 pass（samples/<sample>.json）' },
       png: { type: 'boolean', description: '再截一张 PNG（用本机 Edge 无头渲染；没有 Edge 时只出 HTML）' },
       mathjax: { type: 'boolean', description: '加载 MathJax 排版公式（默认开；mathjax=false 关闭）' },
       ankiBase: { type: 'boolean', description: '叠加近似版 Anki 基础样式（默认开）' },
@@ -1088,7 +1091,27 @@ export function apply(ctx, config = {}) {
       let model = null
       let title = 'Anki 预览'
 
-      if (args.notes?.length) {
+      if (args.scheme) {
+        scheme = await getScheme(store.root, args.scheme, args.schemeVersion)
+        if (!scheme) throw new Error(`没有方案 ${args.scheme}`)
+        const sampleName = args.sample ?? 'pass'
+        const sampleFile = join(store.root, 'schemes', scheme.id, 'samples', `${sampleName}.json`)
+        if (!existsSync(sampleFile)) {
+          throw new Error(`方案 ${scheme.id} 没有样卡 samples/${sampleName}.json`)
+        }
+        let sample
+        try {
+          sample = JSON.parse(readFileSync(sampleFile, 'utf8'))
+        } catch (error) {
+          throw new Error(`样卡解析失败：${error.message}`)
+        }
+        const fields = sample.fields ?? sample
+        fieldsList = [Object.fromEntries(
+          scheme.output.fields.map((field) => [field.name, fields[field.name] ?? '']),
+        )]
+        model = scheme.output.model
+        title = `${scheme.title}｜样卡 ${sampleName}`
+      } else if (args.notes?.length) {
         const info = (await anki.notesInfo(args.notes)) ?? []
         const present = info.filter(Boolean)
         for (const note of present) {
@@ -1173,6 +1196,20 @@ export function apply(ctx, config = {}) {
         })
         if (pngFile) files.push(pngFile)
         pngNote = pngFile ? `；PNG：${pngFile}` : '；PNG 未生成（没找到 Edge 或渲染超时）'
+      }
+
+      if (args.scheme) {
+        const renderDir = join(store.root, 'schemes', scheme.id, 'samples', 'render')
+        await mkdir(renderDir, { recursive: true })
+        const sampleName = args.sample ?? 'pass'
+        const copiedHtml = join(renderDir, `${sampleName}.html`)
+        copyFileSync(file, copiedHtml)
+        files.push(copiedHtml)
+        if (pngFile) {
+          const copiedPng = join(renderDir, `${sampleName}.png`)
+          copyFileSync(pngFile, copiedPng)
+          files.push(copiedPng)
+        }
       }
 
       if (args.split) {
@@ -1480,6 +1517,8 @@ export function apply(ctx, config = {}) {
         '## 工具与方案约定',
         '可用工具：project（项目）、scheme（方案）、practice（实践）、batch（批次）、materials（资料与行号）、card_write（plan/commit/verify）、card_preview（离线渲染与打印）。',
         '大任务先 project open 建现场（目标、资料、钉方案），跑通后 project to-scheme 提炼成方案草稿。',
+        '方案保存后必须用 card_preview scheme=<id> sample=pass png=true 渲染一张真实样卡并 present；没有渲染不算交付。',
+        '不要修改插件安装目录（assets/、lib/、index.js）；方案改数据目录里的副本（scheme save 就是写副本）。',
         '有现成方案先用现成的：scheme list → scheme get（正文、模板、实践、目录文件清单）；方案没写的部分由任务决定。',
         '想试新方法：scheme save 先存 draft，可只有正文；做几张真卡后把样卡与判据写进方案目录，scheme test 验证，确认后再 active。',
         '任务收尾时主动检查：这次的做法若值得复用，就存成 draft 方案并说明理由，不必等用户要求；没有产出的一次性任务不建方案。',

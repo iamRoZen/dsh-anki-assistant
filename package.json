@@ -1,6 +1,6 @@
 {
   "name": "dsh-anki-assistant",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "private": true,
   "type": "module",
   "description": "Anki Assistant：方案驱动的制卡助手，含方案库、批次台账、写入闸门与资料读取。",
@@ -45,7 +45,8 @@
   ],
   "scripts": {
     "test": "node --test \"test/*.test.js\"",
-    "clean:temp": "node scripts/clean-temp.mjs"
+    "clean:temp": "node scripts/clean-temp.mjs",
+    "check:workspace": "node scripts/check-workspace.mjs"
   },
   "engines": {
     "dsh": ">=0.2.2-rc.3 <0.3.0",
