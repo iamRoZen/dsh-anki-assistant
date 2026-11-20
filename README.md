@@ -139,6 +139,9 @@ scheme import path=<repo>/examples/schemes/gaoshu-steps
 
 打包：`npm pack` 生成 tarball（含 `lib/`、`assets/`、`docs/`、`scripts/`、`LICENSE`，不含 `test/`、`dist/`、`__pycache__`）。要发布到 npm 需先去掉 `package.json` 里的 `"private": true`。
 
+运行时依赖两个包：`parse5`（预览 HTML 过滤）与 `proper-lockfile`（数据锁）。安装时需要能访问 npm registry；
+离线环境请先准备 npm 缓存，或把依赖换成本地 vendored 版本后再装。DSH 用 pnpm 安装时若拿不到 registry，会报拉取依赖失败。
+
 ## 测试
 
 ```bash
