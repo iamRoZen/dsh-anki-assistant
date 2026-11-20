@@ -1,6 +1,6 @@
 {
   "name": "dsh-anki-assistant",
-  "version": "0.8.5",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "description": "Anki Assistant：方案驱动的制卡助手，含方案库、批次台账、写入闸门与资料读取。",

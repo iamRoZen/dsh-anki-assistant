@@ -128,6 +128,17 @@
 7. `scheme save`（可带 `files` 写附件），状态先 `draft`。
 8. 用 2–3 张真实内容验证写法，确认后再批量；用户认可后转 `active`。
 
+## 从项目提炼
+
+项目（`project` 工具）是一次任务的现场：目标、资料、批次、决策记录、认可的样卡。
+跑通之后用 `project to-scheme` 把 `notes/` 与 `samples/` 提炼成 `draft` 方案，再补：
+
+1. `output.model` / `output.fields`；
+2. 把规则整理进 `quality.rules` 或 `validate.mjs`；
+3. 一张能过、一张该被拦的样卡，`scheme test` 通过后转 `cards` + `active`。
+
+不要跳过项目直接写方案：没有真卡与决策记录，方案容易变成空壳。
+
 ## 分享
 
 把整个方案目录拷给别人即可（`scheme.json` + 正文 + 样卡 + 判据 + 样式）。

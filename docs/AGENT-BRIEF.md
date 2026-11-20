@@ -157,7 +157,26 @@ blocked  failed/parked
 
 并发边界：不同批次可以并行（各自文件、提交锁按批次）；同一批次绝不并发。子 Agent 继承工具，所以"不越界"靠提示词，不是硬隔离。
 
-## 11. 版本
+## 11. 项目目录（一次任务的现场）
+
+大任务先建项目，不要一上来写方案：
+
+```
+<dataDir>/projects/<id>/
+  project.json   目标、钉住的方案、deck/model、关联批次与实践
+  sources/       资料引用
+  notes/         设计记录、取舍、踩坑（自由文本，按时间一份）
+  samples/       这次认可的样卡（之后提炼进方案）
+  exports/       预览图、PDF
+```
+
+流程：`project open` → 做卡（批次照常开，`project update batch=<id>` 关联）→
+`project update note=…` 记录决策 → `project close summary=…` → `project to-scheme`。
+
+`to-scheme` 会把 `notes/`（含结项摘要）拼成方案正文、把 `samples/` 复制过去，生成一个 `draft` 方案；
+方案里还缺的模型/字段/判据，再按 `SCHEME-FORMAT` 补。**项目是现场，方案是复用件，两者不混。**
+
+## 12. 版本
 
 - 插件 `0.8.1`；DSH `>=0.2.2-rc.3 <0.3.0`；Node `>=22.19`；`npm test` 104/104。
 - 方案格式见 [SCHEME-FORMAT.md](SCHEME-FORMAT.md)，设计取舍见 [DETAIL.md](DETAIL.md)。

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- 新增 `project` 工具：项目目录（目标、资料、批次、决策记录、样卡），
+  `open/list/get/update/close/to-scheme/delete`
+- `to-scheme`：把 notes 拼成正文、样卡复制过去，生成 draft 方案
+- Anki 路径探测放宽：`where anki` + 各盘 Program Files；连不上时自动拉起
+
 ## 0.8.5
 
 - Anki 没开时自动拉起：`ankiExe` 可配置，未配置则探测常见安装位置；最多等 20 秒，失败才报错

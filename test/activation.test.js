@@ -41,7 +41,20 @@ async function mount() {
 
 test('注册六个工具，名字稳定', async () => {
   const { tools } = await mount()
-  assert.deepEqual([...tools.keys()].sort(), ['batch', 'card_preview', 'card_write', 'materials', 'practice', 'scheme'])
+  assert.deepEqual([...tools.keys()].sort(), ['batch', 'card_preview', 'card_write', 'materials', 'practice', 'project', 'scheme'])
+})
+
+test('project 建项、记录、提炼成方案', async () => {
+  const { tools } = await mount()
+  const project = tools.get('project')
+  await project.execute({ action: 'open', id: 'proj-test', title: '测试项目', goal: '两张卡', deck: 'D', model: 'M' }, {})
+  await project.execute({ action: 'update', id: 'proj-test', note: '# 决策\n\n一条规则。' }, {})
+  const got = await project.execute({ action: 'get', id: 'proj-test' }, {})
+  assert.equal(got.project.id, 'proj-test')
+  const out = await project.execute({ action: 'to-scheme', id: 'proj-test' }, {})
+  assert.match(out.scheme.id, /proj-test-scheme/)
+  const saved = await tools.get('scheme').execute({ action: 'get', id: out.scheme.id }, {})
+  assert.match(saved.scheme.body, /一条规则/)
 })
 
 test('scheme save 可带附件，scheme get 返回方案目录清单', async () => {

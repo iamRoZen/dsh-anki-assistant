@@ -65,6 +65,7 @@ anki-assistant/
 
 | 工具 | 作用 |
 |---|---|
+| `project` | 项目：`open` / `list` / `get` / `update` / `close` / `to-scheme` / `delete`（一次任务的现场，跑通后提炼方案） |
 | `scheme` | 方案库：`list` / `get`（正文、模板、实践、目录文件清单） / `save`（永远写新版本） / `import`（导入外来目录，自动规范 id） / `test`（跑方案自带测试或样卡） / `delete`（需确认；批次钉住时拒绝） |
 | `practice` | 实践库：`list` / `get` / `save`（记录一次真实运行） / `delete`（需确认） |
 | `batch` | 批次：`open` / `put` / `validate` / `fix`（修复挖空截断） / `next` / `mark` / `status` |
