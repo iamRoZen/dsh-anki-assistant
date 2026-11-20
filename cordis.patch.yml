@@ -70,6 +70,8 @@
             disabled: !!js process.platform === 'win32'
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'
           - id: tool-web
             name: '@deepseek-ai/dsh-tool-web'
           - id: tool-ask-user

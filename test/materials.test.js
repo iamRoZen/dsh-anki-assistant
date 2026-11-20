@@ -51,3 +51,11 @@ test('findLines 返回页码与 1 基行号', () => {
 test('空关键词不命中', () => {
   assert.deepEqual(findLines({ pages: [{ page: 1, lines: ['x'] }] }, '  '), [])
 })
+
+test('同高度相距较远的双栏保留独立行', () => {
+  const lines = itemsToLines([
+    item('左栏第一行', 0, 100), item('右栏第一行', 350, 100),
+    item('左栏第二行', 0, 90), item('右栏第二行', 350, 90),
+  ])
+  assert.deepEqual(lines, ['左栏第一行', '右栏第一行', '左栏第二行', '右栏第二行'])
+})

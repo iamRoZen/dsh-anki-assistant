@@ -7,7 +7,7 @@ node scripts/audit-schemes.mjs                    # 默认 ~/.dsh/anki-assistant
 node scripts/audit-schemes.mjs <别的 dataDir>      # 迁移前先看另一份数据
 ```
 
-输出每个方案的版本、状态、交付物、字段/规则、附件与问题清单。**没有问题的方案不需要迁移。**
+输出每个方案的版本、状态、交付物、字段/规则、附件与问题清单。旧版本仍可读取。新保存或导入的版本会把正文、样卡和判据一起归档。
 
 ## 常见不兼容与改法
 
@@ -42,9 +42,9 @@ scheme import path="D:/旧项目/schemes/medical_qac" upgrade=true \
 
 1. 读外部 `scheme.json`，id 规范后**匹配已有方案**；
 2. 给已有 id 出一个新版本（旧版本、旧正文保留）；
-3. 复制外部目录的 `body.md`、`validate.mjs`、`print.css`、`samples/`、`vendor/`、`scripts/` 覆盖到当前方案目录；
-4. 新版本默认 `draft`，不会自动改绑批次；
-5. 先 `scheme test`，再决定是否 `active`。
+3. 把外部正文、校验器、样式和样卡存为新版本的附件。旧版本继续读取原有附件。
+4. 外部记录未指定状态时默认为 `draft`。已有批次和项目继续使用所钉版本。
+5. 用户审阅脚本后，把相应 `id@version` 加到 `trustedSchemeVersions`，重启 DSH 再跑 `scheme test`。
 
 不加 `upgrade=true` 时，同名方案直接拒绝，避免误覆盖。
 
@@ -56,4 +56,6 @@ scheme import path="D:/旧项目/schemes/medical_qac" upgrade=true \
 4. 每个方案 `scheme save` 新版本 + `scheme test`；
 5. 全部通过后再把状态转 `active`，观察一次真实任务；
 6. 确认没有批次需要旧版本后，`scheme prune id=<id> confirm=true` 清掉半成品版本
-   （自动保留 active 与被批次钉住的版本）。
+   （保留当前版本及被批次或项目引用的版本）。
+
+旧版未提交的写入计划需要重新 `plan`。已有提交回执可继续 `verify`。

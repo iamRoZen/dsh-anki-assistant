@@ -32,7 +32,7 @@
   vendor/             可选。原码与依赖（如医学方案的 Python 判据）
   notes/              可选。经验、设计假设、哲学、案例、实验日志
   print.css           可选。该方案的打印样式
-  body.v<N>.md        自动生成。历史正文快照，不要手改
+  scheme.json 与附件作为一个版本快照由插件存入 versions/<version>/
 ```
 
 ## 哪些是承重的
@@ -54,7 +54,6 @@
   "id": "gaoshu-steps",
   "title": "数学推导·一步一动作",
   "status": "draft",
-  "revision": 1,
   "deliverable": "cards",
   "appliesTo": { "cardTypes": ["定理与公式", "推导"], "subjects": ["高等数学"] },
   "inputs": [{ "kind": "textbook", "required": true }],
@@ -65,7 +64,7 @@
     "print": { "style": "answer" }
   },
   "quality": {
-    "rules": [{ "id": "cite-required", "field": "引用", "kind": "required" }],
+    "rules": [{ "id": "cite-required", "field": "问题", "kind": "required" }],
     "validator": { "suite": "gaoshu-steps", "module": "validate.mjs", "checks": ["CLOZE", "STEPS"] },
     "rubric": "条件与限定语不得省略；一步只做一次变形"
   },
@@ -90,9 +89,8 @@
 
 ## 三条硬约定
 
-1. **默认只增不改**：`scheme save` 永远生成新版本，旧版本与旧正文（`body.v<N>.md`）保留；
-   确认不再需要时用 `scheme prune`（保留 active 与被批次钉住的版本，需 `confirm`）。
-2. **批次钉版本**：批次记录 `{id, version}`，改方案不影响正在跑的批次。
+1. **默认只增不改**。`scheme save` 先写齐该版附件，再切换当前版本。`scheme prune` 保留当前及被批次、项目引用的版本，需 `confirm=true`。
+2. **钉住版本**。批次和项目记录 `{id, version}`。工具按同一版本读取正文、样卡、样式和判据。
 3. **判据随方案**：`validate.mjs` 与 `vendor/` 放在方案目录里，换掉方案，判据一起消失。
 
 ## 模块边界（v1 定稿）
@@ -103,7 +101,7 @@
 2. 两种形态：`method`（知识，可只有正文）与 `cards`（生产契约，必须有模型与字段）。
 3. 机器只读四样：`scheme.json`、`body.md`、校验器模块、`print.css`；其余文件自由。
 4. 批次钉 `{id, version}`；改方案不影响在跑批次。
-5. 校验器契约：`validate(fields, options) → { suite, ok, issues, source }`；缺失或异常即报错。
+5. 校验器契约为 `validate(fields, options) → { suite, ok, issues, source }`。外部或旧版脚本需由用户在 `trustedSchemeVersions` 中授权对应版本。
 6. 测试契约：优先 `test/run.mjs`，否则 `validate.mjs` + `samples/`；都没有时如实报「无测试」。
 7. 系统提示词只放索引（`id@version title 类型`），正文按需 `scheme get`，不整段塞进上下文。
 
@@ -138,7 +136,7 @@ card_preview scheme=<id> sample=pass png=true
 ```
 
 - 模板与 CSS 来自 Anki 的 note type（`output.model`），**方案目录不放卡片模板文件**；
-- 渲染结果落到方案的 `samples/render/pass.png`（与 `pass.html`）；
+- 渲染结果按版本放到方案的 `samples/render/v<N>/`，例如 `pass.png` 和 `pass.html`。
 - 没有这张图，方案交付不算完成。
 
 ## 从外部文件起一个方案
@@ -169,6 +167,6 @@ scheme derive id=gaoshu-from-articles title="从两篇文章来的数学卡方�
 - 仓库示例放 `examples/schemes/`，**不随包分发**；用户按需 `scheme import`；
 - 给某个人：让对方用 `scheme import path=<目录>` 导入，插件会：
   1. 读 `scheme.json`，把 id 规范成可当目录名的形式（小写、空格与标点变连字符，保留中英文）；
-  2. 整个目录复制进 `<dataDir>/schemes/<id>/`；
-  3. 登记为 `draft`，正文留快照，其余文件原样保留，`scheme get` 会列出清单。
-- 同名方案已存在时不会覆盖，先确认是升级（`save` 新版本）还是换名。
+  2. 正文及附件保存到 `<dataDir>/schemes/<id>/versions/<version>/`。
+  3. 缺省状态为 `draft`。`scheme get` 返回附件目录和清单。脚本在宿主用户按版本授权后启用。
+- 同名方案可用 `upgrade=true` 导入新版本。分享已保存的方案时，使用 `scheme get` 返回的 `assetDir`。

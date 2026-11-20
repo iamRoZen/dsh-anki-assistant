@@ -13,11 +13,11 @@
 
 ```bash
 npm install --omit=dev
-dsh plugin install --profile desktop .     # 或在 GUI 插件管理里安装本目录
+dsh plugin --profile desktop add .         # 或在 GUI 插件管理里安装本目录
 ```
 
 - 链接安装：改源码后**重启 Desktop** 才加载新代码，不用重装。
-- 自检四步：`npm test` 应 110/110；新会话能选「Anki Assistant」；`scheme list` 能列出方案（数据目录为空属正常）；`card_preview` 能出图。
+- 自检四步：`npm test` 全部通过；新会话能选「Anki Assistant」；`scheme list` 能列出方案（数据目录为空属正常）；`card_preview` 能出图。
 - 示例不随包：需要时 `scheme import path=<repo>/examples/schemes/<id>`。
 - preset 不出现时依次查：profile `package.json` 里有没有 `link:`；`node_modules` 是不是 junction；`package.json` 是否带 UTF-8 BOM。
 
@@ -33,7 +33,8 @@ dsh plugin install --profile desktop .     # 或在 GUI 插件管理里安装本
 
 | 工具 | 动作 | 关键参数 | 返回/语义 |
 |---|---|---|---|
-| `scheme` | list / get / save / import / test / delete | get/save: `id`；save: `scheme` + `body` + 可选 `files`；test: `id`；delete: `confirm`（active 需 `force`） | save 永远出新版本；delete 被批次钉住时拒绝 |
+| `scheme` | list / get / save / import / derive / test / prune / delete | get/save: `id`；save: `scheme` + `body` + 可选 `files`；test: `id`；delete: `confirm`（active 需 `force`） | save 永远出新版本；delete 被批次钉住时拒绝 |
+| `project` | open / list / get / update / close / to-scheme / delete | `id` 选择项目，可用 `scheme` 与 `schemeVersion` 钉版本 | `to-scheme` 保存新草稿 |
 | `practice` | list / get / save / delete | save: `id`、`body`、`scheme`、`schemeVersion`、`modules`、`tags`；delete: `confirm` | 实践是真实运行记录，不是方案 |
 | `batch` | open / put / validate / fix / next / mark / status | open: `batch`、`scheme`、`deck`、`model`；put: `items`；fix: `apply` | 批次台账在 `<dataDir>/batches` |
 | `materials` | **没有 action**：给 `path` 读，给 `keyword` 只返回命中行 | `path`、`pages`、`keyword` | 返回 `p页:L行`，可直接写进定位字段 |
@@ -127,27 +128,14 @@ blocked  failed/parked
 
 ## 9. 并发与所有权
 
-**结论：不是并发安全的。** 单个文件是原子写（临时文件 + 改名），但"读 → 改 → 写"没有锁，两个写入者会互相覆盖。
+方案的保存、清理和绑定共用方案锁。批次修改和提交共用批次锁，提交在锁内重读台账。
 
-| 链路 | 能否并发 | 说明 |
-|---|---|---|
-| `scheme list/get` | ✅ | 只读 |
-| `scheme save` | ⚠️ 部分 | 版本号用独占创建，两个保存会得到 vN 与 vN+1，都保留；`active.json` 指针后写者胜 |
-| `scheme delete` | ❌ | 与 `batch open` 存在竞态：删除前会查批次，但查完到删除之间别人可能新建批次 |
-| `batch open/put/validate/fix/mark` | ❌ | 读改写同一 JSON，后写覆盖前写 |
-| `card_write plan` | ✅ | 计划 id 唯一；批次变了旧计划会自动失效 |
-| `card_write commit` | ⚠️ 同批次串行 | 同一批次加提交锁：第二个会等锁，且旧计划会因批次变化失效；不同批次可并行 |
-| `practice save/delete` | ❌ | 索引是读改写，会丢条目 |
-| `card_preview` | ✅ | 每次独立 Edge profile + 唯一文件名 |
-| `materials` | ✅ | 只读 |
-| `audit` 追加 | ✅ 基本安全 | 单行追加，交错时行不会混在一起 |
-
-必须遵守的规则：
-
-1. **一个数据目录同一时间只允许一个写入者**；分发时按批次或方案划分归属。
-2. **不要两个 Agent 同时 commit 同一批次**。
-3. 删除方案前确认没有 Agent 正在 `batch open`。
-4. 需要并行时：只读操作（get/list/notesInfo/preview）可并行，写入串行。
+| 链路 | 并发行为 |
+|---|---|
+| 方案读写 | 完整版本写好后才发布。删除与清理时检查批次和项目引用 |
+| 批次及提交 | 同一批次串行，不同批次独立。重试同一个提交会沿用回执 |
+| 预览、资料 | 预览使用独立临时浏览器配置与唯一输出文件 |
+| 实践和项目 | 更新同一个记录由同一个 Agent 负责 |
 
 ## 10. 子 Agent 协作（可直接执行）
 
@@ -161,7 +149,7 @@ blocked  failed/parked
 4. 子 Agent 可跑：`batch open/put/validate/fix` → `card_write plan/commit/verify` → `card_preview`；回报批次 id、写入数、verify 结果、预览路径；
 5. 主 Agent 收口：汇总、抽查预览、`present`；跨批去重与冲突由主 Agent 处理。
 
-并发边界：不同批次可以并行（各自文件、提交锁按批次）；同一批次绝不并发。子 Agent 继承工具，所以"不越界"靠提示词，不是硬隔离。
+不同批次可以并行。同一批次的更新和提交共用一把锁。子 Agent 继承工具，仍需遵守上面的归属约定。
 
 ## 11. 项目目录（一次任务的现场）
 
@@ -184,5 +172,5 @@ blocked  failed/parked
 
 ## 12. 版本
 
-- 插件 `0.11.0`；DSH `>=0.2.2-rc.3 <0.3.0`；Node `>=22.19`；`npm test` 110/110。
+- 插件 `0.11.x`。支持 DSH `>=0.2.2-rc.3 <0.3.0`，Node `>=22.19`。
 - 方案格式见 [SCHEME-FORMAT.md](SCHEME-FORMAT.md)，设计取舍见 [DETAIL.md](DETAIL.md)。

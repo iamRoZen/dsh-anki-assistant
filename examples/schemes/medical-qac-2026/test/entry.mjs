@@ -64,6 +64,7 @@ async function mount({ python } = {}) {
   const { ctx, tools } = fakeContext()
   apply(ctx, {
     dataDir,
+    trustedSchemeVersions: ['medical-qac-2026@1'],
     ankiClient: fakeAnki(),
     ...(python ? { python } : {}),
   })

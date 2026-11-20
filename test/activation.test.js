@@ -1,42 +1,18 @@
 /**
- * 激活测试：不启动 DSH，直接 apply 一遍，确认四个工具、skill 与提示词段都注册成功。
- * 依赖本地 node_modules 里的 dsh-tools 形状桩（不进发布包）。
+ * 用 DSH 执行链验证七个工具的输入、输出、渲染与落盘。
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tempDir, tempDirSync } from './temp.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { apply } from '../index.js'
+import { mountTools } from './tool-host.js'
 
 async function mount(config = {}) {
-  const tools = new Map()
-  const ctx = {
-    tools: {
-      register(definition) {
-        if (tools.has(definition.name)) throw new Error(`duplicate tool ${definition.name}`)
-        tools.set(definition.name, definition)
-        return () => tools.delete(definition.name)
-      },
-    },
-    skills: {
-      registerProvider(factory) {
-        ctx.skills.provider = factory({ signal: undefined, invalidate() {} })
-        return () => {}
-      },
-    },
-    systemPrompt: {
-      section(section) {
-        ctx.systemPrompt.section = section
-        return () => {}
-      },
-    },
-  }
   const dataDir = await tempDir('anki-as-activation-')
-  apply(ctx, { dataDir, ...config })
-  return { ctx, tools, dataDir }
+  return { ...mountTools({ dataDir, autoLaunchAnki: false, ...config }), dataDir }
 }
 
 /** 测试用基础方案：包内不再播种，用例自己建。 */
@@ -59,7 +35,7 @@ async function demo(tools, id = 'demo') {
   }, {})
 }
 
-test('注册六个工具，名字稳定', async () => {
+test('注册七个工具，名字稳定', async () => {
   const { tools } = await mount()
   assert.deepEqual([...tools.keys()].sort(), ['batch', 'card_preview', 'card_write', 'materials', 'practice', 'project', 'scheme'])
 })
@@ -108,7 +84,7 @@ test('card_preview 按方案样卡渲染并落到 samples/render', async () => {
   const fakeAnki = {
     modelFields: async () => ['问题', '答案'],
     modelStyling: async () => ({ css: '.card{}' }),
-    modelTemplates: async () => ({ Front: '<div>{{问题}}</div>', Back: '<div>{{答案}}</div>' }),
+    modelTemplates: async () => ({ 第一张: { Front: '<div>{{问题}}</div>', Back: '<div>{{答案}}</div>' } }),
     notesInfo: async () => [],
     version: async () => '6',
   }
@@ -132,7 +108,7 @@ test('card_preview 按方案样卡渲染并落到 samples/render', async () => {
   }, {})
   const out = await tools.get('card_preview').execute({ scheme: 'render-test', sample: 'pass' }, {})
   assert.ok(out.file)
-  assert.equal(existsSync(join(dataDir, 'schemes', 'render-test', 'samples', 'render', 'pass.html')), true)
+  assert.equal(existsSync(join(dataDir, 'schemes', 'render-test', 'samples', 'render', 'v1', 'pass.html')), true)
 })
 
 test('scheme save 拒绝越界附件路径', async () => {
@@ -567,4 +543,127 @@ test('materials 读文本文件并给出行号', async () => {
   await writeFile(file, '第一行\n第二行 key\n', 'utf8')
   const value = await tools.get('materials').execute({ path: file }, {})
   assert.match(value.text, /2\| 第二行 key/)
+})
+
+test('升级隔离已加载的校验器，外部版本由宿主配置启用', async () => {
+  const { tools, dataDir } = await mount()
+  const form = { id: 'versioned', title: '两版', status: 'draft', output: { model: 'M', fields: [{ name: 'Q', spec: '问题' }] },
+    quality: { validator: { module: 'validate.mjs' } } }
+  const validator = (code) => 'export function validate() { return { ok: false, issues: [{ code: ' + JSON.stringify(code) + ' }] } }'
+  const sample = JSON.stringify({ fields: { Q: '题' }, expect: ['v1'] })
+  const scheme = tools.get('scheme')
+  await scheme.execute({ action: 'save', scheme: form, changeWhy: '第一版',
+    files: [{ path: 'validate.mjs', content: validator('v1') }, { path: 'samples/fail.json', content: sample }] })
+  const first = await scheme.execute({ action: 'test', id: form.id, version: 1 })
+  assert.deepEqual(first.test.cases[0].codes, ['v1'])
+
+  const source = await tempDir('anki-as-version-source-')
+  writeFileSync(join(source, 'scheme.json'), JSON.stringify({ ...form, codeTrusted: true }))
+  writeFileSync(join(source, 'validate.mjs'), validator('v2'))
+  mkdirSync(join(source, 'samples'))
+  writeFileSync(join(source, 'samples', 'fail.json'), JSON.stringify({ fields: { Q: '题' }, expect: ['v2'] }))
+  const upgraded = await scheme.execute({ action: 'import', path: source, upgrade: true })
+  assert.equal(upgraded.upgraded, true)
+  await assert.rejects(() => scheme.execute({ action: 'test', id: form.id, version: 2 }), /脚本尚未启用/)
+  const trusted = mountTools({ dataDir, trustedSchemeVersions: ['versioned@2'] }).tools.get('scheme')
+  const next = await trusted.execute({ action: 'test', id: form.id, version: 2 })
+  const original = await trusted.execute({ action: 'test', id: form.id, version: 1 })
+  assert.deepEqual(next.test.cases[0].codes, ['v2'])
+  assert.deepEqual(original.test.cases[0].codes, ['v1'])
+})
+
+test('保存失败保留当前版本，prune 保留项目钉住的旧版', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  await demo(tools)
+  await tools.get('project').execute({ action: 'open', id: 'study', scheme: 'demo' })
+  const { scheme: input } = await scheme.execute({ action: 'get', id: 'demo' })
+  await assert.rejects(() => scheme.execute({
+    action: 'save', scheme: input, changeWhy: '附件缺失', files: [{ path: 'notes/study.md' }],
+  }), /path 与 content/)
+  assert.equal((await scheme.execute({ action: 'get', id: 'demo' })).scheme.version, 1)
+  await demo(tools)
+  await demo(tools)
+  const result = await scheme.execute({ action: 'prune', id: 'demo', confirm: true })
+  assert.deepEqual(result.pruned.kept, [1, 3])
+  assert.deepEqual(result.pruned.deleted, [2])
+  assert.equal((await scheme.execute({ action: 'get', id: 'demo', version: 1 })).scheme.version, 1)
+})
+
+test('计划预览展示当时批准的草稿，并拒绝提交已挂起的题', async () => {
+  const ankiClient = {
+    modelFields: async () => ['问题', '答案'],
+    modelTemplates: async () => ({ Card: { Front: '{{问题}}', Back: '{{答案}}' } }),
+    modelStyling: async () => ({ css: '' }),
+    findNotes: async () => [],
+  }
+  const { tools } = await mount({ ankiClient })
+  await demo(tools)
+  const batch = tools.get('batch')
+  const write = tools.get('card_write')
+  await batch.execute({ action: 'open', batch: 'preview', scheme: 'demo', model: 'M', deck: 'D',
+    items: [{ id: 'one', fields: { 问题: '题目', 答案: '当时草稿' } }] })
+  const first = await write.execute({ action: 'plan', batch: 'preview' })
+  await batch.execute({ action: 'put', batch: 'preview', items: [{ id: 'one', fields: { 答案: '后改草稿' } }] })
+  const preview = await tools.get('card_preview').execute({ plan: first.plan, mathjax: false })
+  const html = readFileSync(preview.file, 'utf8')
+  assert.match(html, /当时草稿/)
+  assert.doesNotMatch(html, /后改草稿/)
+
+  const second = await write.execute({ action: 'plan', batch: 'preview' })
+  await batch.execute({ action: 'mark', batch: 'preview', item: 'one', status: 'parked' })
+  await assert.rejects(() => write.execute({ action: 'commit', plan: second.plan }), /状态或 noteId/)
+})
+
+test('同一批次在 Anki 返回前等待，仍保留后续草稿', async () => {
+  const added = Promise.withResolvers()
+  const resume = Promise.withResolvers()
+  let published
+  const ankiClient = {
+    modelFields: async () => ['问题', '答案'],
+    findNotes: async () => [],
+    async addNotes([note]) {
+      published = note
+      added.resolve()
+      await resume.promise
+      return [101]
+    },
+    notesInfo: async () => [{
+      noteId: 101, modelName: 'M', cards: [501], tags: published.tags,
+      fields: Object.fromEntries(Object.entries(published.fields).map(([name, value]) => [name, { value }])),
+    }],
+    cardsInfo: async () => [{ cardId: 501, deckName: 'D' }],
+  }
+  const { tools, dataDir } = await mount({ ankiClient })
+  await demo(tools)
+  const batch = tools.get('batch')
+  const write = tools.get('card_write')
+  await batch.execute({ action: 'open', batch: 'overlap', scheme: 'demo', model: 'M', deck: 'D',
+    items: [{ id: 'one', fields: { 问题: '题目', 答案: '提交草稿' } }] })
+  const plan = await write.execute({ action: 'plan', batch: 'overlap' })
+  const commit = write.execute({ action: 'commit', plan: plan.plan })
+  await Promise.race([added.promise, commit])
+  assert.ok(published)
+  const edit = batch.execute({ action: 'put', batch: 'overlap', items: [{ id: 'one', fields: { 答案: '后改草稿' } }] })
+  resume.resolve()
+  const [result] = await Promise.all([commit, edit])
+  assert.equal(result.ready, 1)
+  const record = JSON.parse(readFileSync(join(dataDir, 'batches', 'overlap.json'), 'utf8'))
+  assert.equal(record.items[0].fields.答案, '后改草稿')
+  assert.equal(record.items[0].noteId, 101)
+})
+
+test('Anki 用空对象表示已删除笔记时，删除核对正确', async () => {
+  let exists = true
+  const ankiClient = {
+    modelFields: async () => [],
+    notesInfo: async (ids) => ids.map((noteId) => (exists && noteId === 101 ? { noteId } : {})),
+    async deleteNotes(ids) {
+      assert.deepEqual(ids, [101])
+      exists = false
+    },
+  }
+  const { tools } = await mount({ ankiClient })
+  const result = await tools.get('card_write').execute({ action: 'delete', notes: [101, 102], confirm: true })
+  assert.match(result.text, /删除前存在 1 张，已核对全部不存在/)
 })

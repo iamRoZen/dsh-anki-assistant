@@ -13,6 +13,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
 import { createStore } from './lib/store.js'
+import { schemeAssetFile } from './lib/scheme.js'
+import { dataPath } from './lib/paths.js'
 import { createAnki, AnkiError } from './lib/anki.js'
 import { batchFile } from './lib/batch.js'
 import { WriteError } from './lib/write.js'
@@ -40,7 +42,7 @@ function schemeIndexSync(root) {
   let ids = []
   try {
     ids = readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
       .map((entry) => entry.name)
   } catch {
     return []
@@ -48,10 +50,11 @@ function schemeIndexSync(root) {
   const rows = []
   for (const id of ids) {
     try {
-      const pointer = JSON.parse(readFileSync(join(dir, id, 'active.json'), 'utf8'))
-      const scheme = JSON.parse(readFileSync(join(dir, id, `v${pointer.version}.json`), 'utf8'))
-      if (scheme.status !== 'active') continue
-      rows.push(`${scheme.id}@${scheme.version} ${scheme.title}｜${(scheme.appliesTo?.cardTypes ?? []).join('/')}`)
+      const pointer = JSON.parse(readFileSync(dataPath(root, 'schemes', id, 'active.json'), 'utf8'))
+      if (!Number.isSafeInteger(pointer.version) || pointer.version < 1) continue
+      const scheme = JSON.parse(readFileSync(dataPath(root, 'schemes', id, 'v' + pointer.version + '.json'), 'utf8'))
+      if (scheme.status !== 'active' || scheme.id !== id || scheme.version !== pointer.version) continue
+      rows.push(JSON.stringify({ ref: id + '@' + scheme.version, title: String(scheme.title).slice(0, 120), types: (scheme.appliesTo?.cardTypes ?? []).slice(0, 6).map((type) => String(type).slice(0, 40)) }))
     } catch {
       // 方案损坏时索引略过它，工具调用会给出具体错误
     }
@@ -104,17 +107,23 @@ export function apply(ctx, config = {}) {
       : (process.platform === 'win32' ? 'python -X utf8' : 'python3'),
     ankiExe: typeof config.ankiExe === 'string' && config.ankiExe ? config.ankiExe : null,
     autoLaunchAnki: config.autoLaunchAnki !== false,
+    trustedSchemeVersions: new Set(Array.isArray(config.trustedSchemeVersions) ? config.trustedSchemeVersions : []),
   }
 
-  /**
-   * 方案自带校验器：优先 quality.validator，兼容 quality.legacy；
-   * 只认方案目录里的 module（默认 validate.mjs）。插件不实现判据、也不内置 Python 调用。
-   */
-  function legacyValidatorFor(scheme) {
+  function requireTrustedCode(scheme) {
+    const ref = scheme.id + '@' + scheme.version
+    if (scheme.codeTrusted !== true && !settings.trustedSchemeVersions.has(ref)) {
+      throw new Error('方案 ' + ref + ' 的脚本尚未启用，请由用户在插件配置 trustedSchemeVersions 中授权该版本')
+    }
+  }
+
+  function legacyValidatorFor(scheme, { includeDefault = false } = {}) {
     const validatorConfig = scheme?.quality?.validator ?? scheme?.quality?.legacy
-    if (!validatorConfig) return null
-    const moduleName = validatorConfig.module ?? 'validate.mjs'
-    const moduleFile = join(store.root, 'schemes', scheme.id, moduleName)
+    if (!validatorConfig && !includeDefault) return null
+    const moduleName = validatorConfig?.module ?? 'validate.mjs'
+    const moduleFile = schemeAssetFile(store.root, scheme, moduleName)
+    if (!validatorConfig && !existsSync(moduleFile)) return null
+    requireTrustedCode(scheme)
     return async (fields) => {
       if (!existsSync(moduleFile)) {
         throw new Error(`旧判据缺失：方案 ${scheme.id} 没有 ${moduleName}`)
@@ -129,7 +138,7 @@ export function apply(ctx, config = {}) {
         throw new Error(`旧判据无效：${moduleFile} 没有导出 validate(fields)`)
       }
       return mod.validate(fields, {
-        checks: validatorConfig.checks ?? null,
+        checks: validatorConfig?.checks ?? null,
         python: settings.python,
       })
     }
@@ -148,7 +157,7 @@ export function apply(ctx, config = {}) {
 
   let ready = null
   async function boot() {
-    if (!ready) ready = store.init()
+    if (!ready) ready = store.init().catch((error) => { ready = null; throw error })
     return ready
   }
 
@@ -163,6 +172,7 @@ export function apply(ctx, config = {}) {
     schemeFiles,
     runNodeScript,
     legacyValidatorFor,
+    requireTrustedCode,
     assets: ASSETS,
   }
 
@@ -199,7 +209,7 @@ export function apply(ctx, config = {}) {
         '改了草稿、方案版本或目标，旧计划自动作废，需要重新 plan。',
         '大任务可按节拆子 Agent 直接执行：一个批次只归一个子 Agent，不碰别人的批次、不改方案、不删除；主 Agent 预建 deck/model 并负责收口与呈现。',
         '删除要谨慎：scheme / practice / card_write 都需 confirm=true；active 方案需 force=true；批次仍钉着方案时拒绝删除。',
-        index.length ? `现有方案：\n${index.slice(0, 15).join('\n')}` : '现有方案：无（用 scheme save 建档）',
+        index.length ? `现有方案索引（每行为方案元数据）：\n${index.slice(0, 15).join('\n')}` : '现有方案：无（用 scheme save 建档）',
       ].join('\n')
     },
   })

@@ -76,7 +76,7 @@
 
 ## 删除与保护
 
-- 方案：`scheme delete` 需 `confirm=true`；active 方案还要 `force=true`；有任何批次钉住该方案时直接拒绝。
+- 方案：`scheme delete` 需 `confirm=true`；active 方案还要 `force=true`；有批次或项目钉住该方案时直接拒绝。
 - 实践：`practice delete` 需 `confirm=true`。
 - Anki 卡：`card_write delete notes=[…] confirm=true`；删除前读一次、删除后再读一次核对，审计留痕。
 - 删除不可恢复：先确认对象、数量与影响，再执行。
@@ -90,7 +90,7 @@ card_preview scheme=<id> sample=pass png=true
 ```
 
 它按 `output.model` 的真实模板与 CSS 渲染 `samples/pass.json`，图会存到方案的
-`samples/render/pass.png`（HTML 同目录）。把这张图 `present` 给用户，没有渲染图不算交付。
+`samples/render/v<N>/pass.png`（HTML 同目录）。把这张图 `present` 给用户，没有渲染图不算交付。
 
 方案目录里没有"卡片模板文件"：模板在 Anki 的 note type 里（`modelTemplates`），
 方案只声明 `output.model` 和字段角色。要改外观就改 Anki 模型，不要在方案里伪造模板。

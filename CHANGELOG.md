@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0
+
+- 写盘后报错、写卡重试覆盖回执、并发丢草稿、旧版本误用新判据、空快照误报通过，均已修复
+- 方案附件按版本归档（`versions/<n>/`）；外部/旧版脚本需在 `trustedSchemeVersions` 授权
+- 计划格式升到 v2：旧计划需重新 `plan`，已有提交回执仍可 `verify`
+- 存储层加锁（`proper-lockfile`）；预览 HTML 用 `parse5` 过滤
+- 测试 123/123；打包校验通过；本机 Edge 实出 PNG / PDF
+
 ## 0.11.0
 
 - **插件包不再携带方案**：`assets/` 只剩 `skills/`、`print/`；方案与模板移到 `examples/`，不打包

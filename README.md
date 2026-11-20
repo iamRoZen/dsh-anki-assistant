@@ -69,7 +69,7 @@ scheme import path=<repo>/examples/schemes/gaoshu-steps
 | 工具 | 作用 |
 |---|---|
 | `project` | 项目：`open` / `list` / `get` / `update` / `close` / `to-scheme` / `delete`（一次任务的现场，跑通后提炼方案） |
-| `scheme` | 方案库：`list` / `get` / `save`（永远写新版本） / `derive`（从外部文件起新方案草稿） / `import`（导入外部目录；同名加 `upgrade=true` 出外部来源的新版本） / `test` / `prune`（清理旧版本，保留 active 与批次钉住的版本） / `delete`（需确认；批次钉住时拒绝） |
+| `scheme` | 方案库：`list` / `get` / `save`（永远写新版本） / `derive`（从外部文件起新方案草稿） / `import`（导入外部目录；同名加 `upgrade=true` 出外部来源的新版本） / `test` / `prune`（清理旧版本，保留当前版本及批次、项目钉住的版本） / `delete`（需确认，有批次或项目引用时拒绝） |
 | `practice` | 实践库：`list` / `get` / `save`（记录一次真实运行） / `delete`（需确认） |
 | `batch` | 批次：`open` / `put` / `validate` / `fix`（修复挖空截断） / `next` / `mark` / `status` |
 | `materials` | 读资料并给行号：PDF 按页重建行，可按关键词只取命中行 |
@@ -80,14 +80,14 @@ scheme import path=<repo>/examples/schemes/gaoshu-steps
 
 方案是数据记录 + 方案目录里的文件，不是插件代码。完整目录约定与写作顺序见 [docs/SCHEME-FORMAT.md](docs/SCHEME-FORMAT.md)；拿到项目就要干活的话，先读 [docs/AGENT-BRIEF.md](docs/AGENT-BRIEF.md)。
 
-- `scheme.json`：`id`、`status`、`deliverable`、`output.model` / `output.fields`、`quality.rules`、`quality.validator|legacy`、`revision`
-- `body.md`：做法正文，`scheme get` 原样返回；方案目录里的 `body.v<N>.md` 是历史快照
+- `scheme.json` 记录 `id`、`status`、`deliverable`、模型、字段和判据。登记时由插件分配 `version`。
+- `body.md`、样卡、样式及校验器随版本保存。`scheme get` 返回该版本的正文和附件目录 `assetDir`。
 - `samples/pass.json`、`samples/fail.json`：合格样卡与反例
 - `validate.mjs`：方案自带校验器，导出 `validate(fields, options) → { suite, ok, issues, source }`；缺模块或异常都明确报错，不退回 JS 兜底
 - `print.css`：该方案的打印样式，自动生效
 - 方案目录的 `vendor/`：方案私有的原码与依赖（如 `medical-qac-2026` 的 Python 判据）
 
-机械检查分两层：插件内置（字段、判重、挖空截断、方案规则）与方案自带（`validate.mjs`）。
+机械检查包括插件内置规则与方案自带的校验器。外部导入和旧版方案的脚本由用户配置 `trustedSchemeVersions` 后启用，按 `id@version` 授权。
 
 ## 质量闸门
 
@@ -95,8 +95,8 @@ scheme import path=<repo>/examples/schemes/gaoshu-steps
 2. 命中问题写进该题的 `issues`，状态标 `blocked`，`commit` 不会写；
 3. 校验器缺失或异常 → 报「旧判据未执行」，不通过；
 4. 出处核验需要 refdb，未配置时明确标「出处未核」，不当作失败，也不当作通过；
-5. 计划绑定内容、方案版本与目标；草稿/版本/牌组任何一处变了，旧计划作废；
-6. 方案没有任何校验规则时，`validate` 与 `plan` 都会提示「请人工逐张核对」。
+5. 计划绑定草稿、条目状态、方案版本和目标。可用 `card_preview plan=…` 核对当时计划里的可写条目。
+6. `commit` 保留每个条目的回执。连接中断后重试同一个计划，插件会核对已有结果并继续待确认的部分。
 
 ## 渲染与打印
 
@@ -112,7 +112,7 @@ scheme import path=<repo>/examples/schemes/gaoshu-steps
 
 | 依赖 | 需要 | 缺失时 |
 |---|---|---|
-| Anki + AnkiConnect | 写入、预览 | 方案、批次、校验仍可用；`commit` / `verify` / `card_preview` 报错 |
+| Anki + AnkiConnect | 写入、按笔记预览、读取真实模型 | 方案与批次仍可用。方案和批次预览可退回字段渲染 |
 | `pdfjs-dist`（可选） | 读 PDF | `.txt` / `.md` 仍可读 |
 | Python 3.10+ | 仅声明旧判据的方案（如 `medical-qac-2026`） | 报「旧判据未执行」，不降级 |
 | Microsoft Edge | PNG / PDF | 只出 HTML |
@@ -128,9 +128,12 @@ scheme import path=<repo>/examples/schemes/gaoshu-steps
     ankiExe: "C:/Program Files/Anki/anki.exe"   # 可选；不填则探测常见安装位置
     autoLaunchAnki: true                        # Anki 没开时自动拉起，默认开
     python: "python -X utf8"        # 仅带旧判据的方案用到
+    trustedSchemeVersions: []       # 只填已审阅的版本，例如 "gaoshu-steps@1"
 ```
 
 这段写在 profile 的 preset 配置里（`preset-anki-assistant` 下 `anki-assistant` 那一行的 `config`），或用 GUI 的插件设置改；不配就用默认值。改完重启 Desktop。
+
+外部方案的脚本可在本机执行。用户审阅附件后，把具体版本加入 `trustedSchemeVersions` 并重启。升级成新版本后，按新版本单独授权。
 
 安装后在**新会话**里选 Preset「Anki Assistant」；工具、技能与提示词都挂在 preset 下，其他会话不受影响。
 
@@ -173,4 +176,4 @@ test/               根测试；方案自带测试在各自目录
 
 - 不实现语义判据（「答案是否忠于原文」由人或方案负责）；
 - 不把用户数据打进 npm 包；
-- 预览是模板级近似，不是 Anki 的完整运行时（模板 JS、媒体不执行）。
+- 预览保留常用卡面格式，并限制脚本、外部媒体和本地文件访问。启用 MathJax 时从 CDN 加载排版资源。

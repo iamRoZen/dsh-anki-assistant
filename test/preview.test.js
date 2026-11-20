@@ -110,3 +110,15 @@ test('打印版式：answer 只看背面，question 只看正面，可叠加自�
   const question = buildPrintHtml({ cards, layout: 'question' })
   assert.match(question, /pane-back \{ display: none/)
 })
+
+test('预览保留卡面文字，过滤不受支持的活动内容', () => {
+  const cards = [{ frontHtml: '<article><b>答案</b></article>', backHtml: '<script type="application/json">{"note":"元数据"}</script><p>提示</p>' }]
+  for (const render of [buildCardsHtml, buildPrintHtml]) {
+    const html = render({ cards, title: 'A < B', mathjax: false })
+    assert.match(html, /<article><b>答案<\/b><\/article>/u)
+    assert.match(html, /<p>提示<\/p>/u)
+    assert.match(html, /<title>A &lt; B<\/title>/u)
+    assert.match(html, /Content-Security-Policy/u)
+    assert.doesNotMatch(html, /<script|元数据/u)
+  }
+})

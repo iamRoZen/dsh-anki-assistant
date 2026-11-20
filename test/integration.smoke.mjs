@@ -1,106 +1,76 @@
 /**
- * 真机联调：把整条写入链路跑一遍，最后清干净。
- *
- * 只在设置 ANKI_SMOKE=1 时运行，避免误触真实牌组：
- *   $env:ANKI_SMOKE="1"; node test/integration.smoke.mjs
- *
- * 它会建一个临时牌组 AnkiAssistant::smoke，写 1 张卡，重跑一次验证幂等，
- * 回读字段，然后删卡删牌组。全程走真实 AnkiConnect。
+ * 实际 Anki 联调。只有 ANKI_SMOKE=1 时才创建临时牌组和笔记。
+ * ANKI_SMOKE_MODEL 可指定已存在的笔记模型，默认 Cloze。
  */
 import assert from 'node:assert/strict'
-import { mkdtemp } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
-import { createStore } from '../lib/store.js'
+import { basename, join } from 'node:path'
 import { createAnki } from '../lib/anki.js'
-import { createBatch, upsertItems, saveBatch, loadBatch, summarize } from '../lib/batch.js'
-import { buildPlan, commitPlan, verifyWritten } from '../lib/write.js'
+import { dataPath } from '../lib/paths.js'
+import { mountTools } from './tool-host.js'
 
-if (!process.env.ANKI_SMOKE) {
+if (process.env.ANKI_SMOKE !== '1') {
   console.log('跳过：设置 ANKI_SMOKE=1 才运行真机联调')
   process.exit(0)
 }
 
-const DECK = 'AnkiAssistant::smoke'
-const MODEL = 'Cloze'
-const anki = createAnki({})
+const token = randomUUID()
+const deck = 'AnkiAssistant-Smoke-' + token
+const model = process.env.ANKI_SMOKE_MODEL || 'Cloze'
+const root = await mkdtemp(join(tmpdir(), 'anki-as-smoke-'))
+const anki = createAnki({ autoLaunch: false })
+const noteIds = new Set()
+let planId
+let ownDeck = false
 
-const scheme = {
-  id: 'smoke-scheme',
-  version: 1,
-  status: 'active',
-  title: '联调用',
-  appliesTo: { cardTypes: ['单点'], subjects: ['测试'], materials: [] },
-  inputs: [],
-  methods: [{ stage: 'make', how: '写一句挖空' }],
-  output: {
-    model: MODEL,
-    fields: [
-      { name: '文字', role: 'content', spec: '一句完整的话' },
-      { name: '背面额外', role: 'memory', spec: '怎么背' },
-    ],
-  },
-  quality: {
-    rules: [{ id: 'c1', field: '文字', kind: 'startsWith', value: '{{c1::' }],
-    rubric: '',
-  },
-  limits: [],
-  origin: { kind: 'smoke' },
-}
-
-let noteIds = []
 try {
   await anki.version()
-  await anki.createDeck(DECK).catch(() => null)
+  const names = await anki.modelFields(model)
+  assert.ok(names.length > 0, '联调模型需要字段')
+  assert.ok(!(await anki.decks()).includes(deck), '临时牌组重名')
+  await anki.createDeck(deck)
+  ownDeck = true
 
-  const root = await mkdtemp(join(tmpdir(), 'anki-as-smoke-'))
-  const store = createStore(root)
-  await store.init()
-
-  const batch = createBatch({ id: 'smoke', scheme, target: { deck: DECK, model: MODEL } })
-  batch.fields = ['文字', '背面额外']
-  upsertItems(batch, [{
-    id: 'i1',
-    ref: 'smoke',
-    fields: {
-      文字: '{{c1::心肌梗死}}最早出现的实验室指标是肌红蛋白。',
-      背面额外: '先想"最早"再看时间轴｜p1:L1',
-    },
-  }])
-  await saveBatch(root, batch)
-
-  const first = await buildPlan({ root, batch, scheme, anki })
-  assert.equal(first.plan.items[0].status, 'ready', '计划应可写')
-  const outcomes = await commitPlan({ root, batch, plan: first.plan, anki })
-  assert.equal(outcomes[0].ok, true, `写入应成功：${JSON.stringify(outcomes)}`)
-  noteIds = batch.items.filter((item) => item.noteId).map((item) => item.noteId)
-  console.log('写入成功，noteId =', noteIds)
-  await saveBatch(root, batch)
-
-  const reloaded = await loadBatch(root, 'smoke')
-
-  // 新开一批写同样的内容：应被全局标签的判重挡住，而不是再写一张。
-  const dup = createBatch({ id: 'smoke2', scheme, target: { deck: DECK, model: MODEL } })
-  dup.fields = ['文字', '背面额外']
-  upsertItems(dup, [{
-    id: 'd1',
-    fields: {
-      文字: '{{c1::心肌梗死}}最早出现的实验室指标是肌红蛋白。',
-      背面额外: '重复检查用',
-    },
-  }])
-  const second = await buildPlan({ root, batch: dup, scheme, anki })
-  assert.equal(second.blocked.length, 1, '重跑时同题应被判重挡住')
-  assert.equal(second.plan.items[0].issues.some((issue) => issue.ruleId === 'duplicate-in-anki'), true)
-  console.log('幂等检查通过：同内容第二次被判定为已存在')
-
-  const verify = await verifyWritten({ plan: first.plan, batch: reloaded, anki })
-  assert.equal(verify.checked, 1)
-  assert.deepEqual(verify.mismatches, [])
-  console.log('回读一致：', summarize(reloaded).counts)
+  const { tools } = mountTools({ dataDir: root, ankiClient: anki, autoLaunchAnki: false })
+  const scheme = tools.get('scheme')
+  const batch = tools.get('batch')
+  const cardWrite = tools.get('card_write')
+  await scheme.execute({
+    action: 'save',
+    scheme: { id: 'smoke', title: '真机联调', status: 'draft', output: { model, fields: names.map((name) => ({ name, spec: name })) } },
+    changeWhy: '真机联调',
+  })
+  const fields = Object.fromEntries(names.map((name, index) => [
+    name, index === 0 ? '{{c1::联调 ' + token + '}}' : '',
+  ]))
+  await batch.execute({ action: 'open', batch: 'smoke', scheme: 'smoke', deck, model, items: [{ id: 'one', fields }] })
+  const plan = await cardWrite.execute({ action: 'plan', batch: 'smoke' })
+  assert.equal(plan.ready, 1, plan.text)
+  planId = plan.plan
+  const committed = await cardWrite.execute({ action: 'commit', plan: plan.plan })
+  for (const result of committed.outcomes) {
+    if (Number.isSafeInteger(result.noteId)) noteIds.add(result.noteId)
+  }
+  assert.equal(committed.ready, 1, committed.text)
+  const replayed = await cardWrite.execute({ action: 'commit', plan: plan.plan })
+  assert.deepEqual(replayed.outcomes, committed.outcomes)
+  const verified = await cardWrite.execute({ action: 'verify', plan: plan.plan })
+  assert.equal(verified.checked, 1)
+  assert.deepEqual(verified.mismatches, [])
+  console.log('plan → commit → retry → verify 通过')
 } finally {
-  if (noteIds.length) await anki.deleteNotes(noteIds).catch((error) => console.log('清理卡片失败', error.message))
-  await anki.invoke('deleteDecks', { decks: [DECK], cardsToo: true }).catch(() => null)
-  console.log('已清理临时牌组')
+  try {
+    if (planId) {
+      for (const id of await anki.findNotes('tag:ai-assistant::plan-' + planId)) noteIds.add(id)
+    }
+    if (noteIds.size) await anki.deleteNotes([...noteIds])
+  } finally {
+    try {
+      if (ownDeck) await anki.invoke('deleteDecks', { decks: [deck], cardsToo: true })
+    } finally {
+      await rm(dataPath(tmpdir(), basename(root)), { recursive: true, force: true })
+    }
+  }
 }
