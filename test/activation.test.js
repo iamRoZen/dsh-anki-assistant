@@ -303,6 +303,22 @@ test('scheme derive 从外部文件起一个方案草稿', async () => {
   assert.match(got.scheme.body, /规则二/)
 })
 
+test('scheme test 预检 requirements.txt，缺依赖明确报错', async () => {
+  const { tools } = await mount()
+  await tools.get('scheme').execute({
+    action: 'save',
+    id: 'deps-test',
+    scheme: { id: 'deps-test', title: '依赖预检', status: 'draft', deliverable: 'method' },
+    body: '# 方法',
+    changeWhy: '测试依赖预检',
+    files: [{ path: 'requirements.txt', content: 'definitely-not-installed-xyz>=1\n' }],
+  }, {})
+  await assert.rejects(
+    () => tools.get('scheme').execute({ action: 'test', id: 'deps-test' }, {}),
+    /缺少 Python 依赖/,
+  )
+})
+
 test('scheme import upgrade：给已有方案出外部来源的新版本', async () => {
   const { tools } = await mount()
   const scheme = tools.get('scheme')

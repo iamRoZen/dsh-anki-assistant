@@ -139,6 +139,19 @@ card_preview scheme=<id> sample=pass png=true
 - 渲染结果按版本放到方案的 `samples/render/v<N>/`，例如 `pass.png` 和 `pass.html`。
 - 没有这张图，方案交付不算完成。
 
+## 依赖声明
+
+方案脚本需要 Python 包时，在方案目录放 `requirements.txt`（一行一个，pip 语法）：
+
+```
+pymupdf>=1.24
+Pillow
+```
+
+- `scheme test` 会先预检：缺包直接报错并给出安装命令，**不会自动安装**；
+- 旧式方案放根目录；新保存/导入的方案放 `versions/<n>/`；
+- 只在方案真用到时声明，不要罗列整台环境。
+
 ## 从外部文件起一个方案
 
 ```bash
