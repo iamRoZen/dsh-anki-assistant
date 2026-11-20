@@ -272,6 +272,7 @@ export function apply(ctx, config = {}) {
         },
       },
       path: { type: 'string', description: 'import 时：外来方案目录的绝对路径（内含 scheme.json）' },
+      upgrade: { type: 'boolean', description: 'import 遇到同名方案时：给已有 id 出一个新版本，旧版本保留' },
       changeWhy: { type: 'string', description: 'save 时说明这次改了什么、为什么' },
       includeDrafts: { type: 'boolean', description: 'list 时是否包含 draft 方案，默认 false' },
       query: { type: 'string', description: 'list 时按 id / 标题 / 正文关键词过滤' },
@@ -485,8 +486,33 @@ export function apply(ctx, config = {}) {
         }
         const id = normalizeSchemeId(record.id ?? basename(src))
         const dest = join(store.root, 'schemes', id)
-        if (existsSync(dest)) {
-          throw new Error(`已有方案 ${id}：确认要改成新版本还是换名，再决定是否导入`)
+        const existing = await getScheme(store.root, id)
+        if (existing) {
+          if (args.upgrade !== true) {
+            throw new Error(`已有方案 ${id}（v${existing.version}）：要出新版本请加 upgrade=true，否则先换名`)
+          }
+          const saved = await saveScheme(store.root, {
+            ...record,
+            id,
+            title: existing.title ?? record.title ?? basename(src),
+            status: record.status ?? existing.status ?? 'draft',
+            changeWhy: args.changeWhy ?? `从外部项目 ${basename(src)} 升级`,
+          })
+          for (const name of ['body.md', 'validate.mjs', 'print.css', 'evidence.md', 'checks.md']) {
+            if (existsSync(join(src, name))) copyFileSync(join(src, name), join(dest, name))
+          }
+          for (const sub of ['samples', 'scripts', 'vendor', 'test', 'notes']) {
+            if (existsSync(join(src, sub))) cpSync(join(src, sub), join(dest, sub), { recursive: true, force: true })
+          }
+          const upgradedBody = join(dest, 'body.md')
+          if (existsSync(upgradedBody)) copyFileSync(upgradedBody, join(dest, `body.v${saved.version}.md`))
+          return {
+            scheme: saved,
+            upgraded: true,
+            id,
+            from: src,
+            files: schemeFiles(store.root, id),
+          }
         }
         cpSync(src, dest, { recursive: true })
         const saved = await saveScheme(store.root, {

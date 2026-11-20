@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.2
+
+- `scheme import upgrade=true`：用外部项目的做法给**已有方案**出新版本（旧版保留、批次不改绑）
+- 复制 body / validate / print.css / samples / vendor / scripts；新版本默认 draft
+- MIGRATION 增加"用外部项目升级已有方案"
+
+## 0.9.1
+
+- 方案体检脚本 `scripts/audit-schemes.mjs` 与 `docs/MIGRATION.md`
+- 提示词去掉已在 skill/方案覆盖的 cloze 修复细节
+
 ## 0.9.0
 
 - 新增 `project` 工具：项目目录（目标、资料、批次、决策记录、样卡），

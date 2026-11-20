@@ -219,6 +219,43 @@ test('card_write delete 需要确认', async () => {
   )
 })
 
+test('scheme import upgrade：给已有方案出外部来源的新版本', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  await scheme.execute({
+    action: 'save',
+    id: 'up-test',
+    scheme: {
+      id: 'up-test',
+      title: '旧标题',
+      status: 'draft',
+      deliverable: 'cards',
+      output: { model: 'M', fields: [{ name: '问题', spec: '问句' }] },
+    },
+    body: '旧正文',
+    changeWhy: '初始',
+  }, {})
+  const src = tempDirSync('anki-as-upgrade-')
+  writeFileSync(join(src, 'scheme.json'), JSON.stringify({
+    id: 'up-test',
+    title: '外部标题',
+    status: 'draft',
+    deliverable: 'cards',
+    output: { model: 'M', fields: [{ name: '问题', spec: '问句' }] },
+  }), 'utf8')
+  writeFileSync(join(src, 'body.md'), '# 新正文', 'utf8')
+
+  await assert.rejects(
+    () => scheme.execute({ action: 'import', path: src }, {}),
+    /upgrade=true/,
+  )
+  const result = await scheme.execute({ action: 'import', path: src, upgrade: true, changeWhy: '外部升级' }, {})
+  assert.equal(result.upgraded, true)
+  assert.equal(result.scheme.version, 2)
+  const got = await scheme.execute({ action: 'get', id: 'up-test' }, {})
+  assert.match(got.scheme.body, /新正文/)
+})
+
 test('scheme import 接收外来目录并规范 id', async () => {
   const { tools } = await mount()
   const src = tempDirSync('anki-as-import-')

@@ -27,6 +27,25 @@ node scripts/audit-schemes.mjs <别的 dataDir>      # 迁移前先看另一份�
 3. **先测后转**：新版本先 `draft`，`scheme test` 或跑 2–3 张真卡，再 `active`；
 4. **保留证据**：旧方案的 `body.v*.md`、实践记录不要删，迁移后它们仍是依据。
 
+## 用外部项目升级已有方案（不是搬方案）
+
+外部项目里已经有一套做法，想把它变成**本项目已有方案的新版本**：
+
+```bash
+scheme import path="D:/旧项目/schemes/medical_qac" upgrade=true \
+  changeWhy="按旧项目 2026-11 的判据升级"
+```
+
+行为：
+
+1. 读外部 `scheme.json`，id 规范后**匹配已有方案**；
+2. 给已有 id 出一个新版本（旧版本、旧正文保留）；
+3. 复制外部目录的 `body.md`、`validate.mjs`、`print.css`、`samples/`、`vendor/`、`scripts/` 覆盖到当前方案目录；
+4. 新版本默认 `draft`，不会自动改绑批次；
+5. 先 `scheme test`，再决定是否 `active`。
+
+不加 `upgrade=true` 时，同名方案直接拒绝，避免误覆盖。
+
 ## 在新窗口迁移
 
 1. 新开一个 Anki Assistant 会话；
