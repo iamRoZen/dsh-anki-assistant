@@ -219,6 +219,24 @@ test('card_write delete 需要确认', async () => {
   )
 })
 
+test('scheme derive 从外部文件起一个方案草稿', async () => {
+  const { tools } = await mount()
+  const dir = tempDirSync('anki-as-derive-')
+  writeFileSync(join(dir, 'a.md'), '# 文章 A\n\n规则一', 'utf8')
+  writeFileSync(join(dir, 'b.md'), '# 文章 B\n\n规则二', 'utf8')
+  const scheme = tools.get('scheme')
+  const out = await scheme.execute({
+    action: 'derive',
+    id: 'derived-test',
+    title: '从文章起方案',
+    sources: [join(dir, 'a.md'), join(dir, 'b.md')],
+  }, {})
+  assert.equal(out.scheme.deliverable, 'method')
+  const got = await scheme.execute({ action: 'get', id: 'derived-test' }, {})
+  assert.match(got.scheme.body, /规则一/)
+  assert.match(got.scheme.body, /规则二/)
+})
+
 test('scheme import upgrade：给已有方案出外部来源的新版本', async () => {
   const { tools } = await mount()
   const scheme = tools.get('scheme')

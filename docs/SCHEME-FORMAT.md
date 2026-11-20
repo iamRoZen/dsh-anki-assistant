@@ -128,6 +128,16 @@
 7. `scheme save`（可带 `files` 写附件），状态先 `draft`。
 8. 用 2–3 张真实内容验证写法，确认后再批量；用户认可后转 `active`。
 
+## 从外部文件起一个方案
+
+```bash
+scheme derive id=gaoshu-from-articles title="从两篇文章来的数学卡方案" \
+  sources=["notes/a.md", "notes/b.md"]
+```
+
+把外部文本按「来源标题 + 原文」拼成正文骨架，存成 `method` 草稿。它**只做汇总，不做提炼**；
+随后用 `scheme save` 出新版本，把真正可执行的部分写清楚，补样卡、判据与字段。
+
 ## 从项目提炼
 
 项目（`project` 工具）是一次任务的现场：目标、资料、批次、决策记录、认可的样卡。

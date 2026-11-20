@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.3
+
+- `scheme derive`：把外部文件（文本）拼成正文骨架，起一个 `method` 草稿方案；只汇总，不假装提炼
+- 文档说明三种路径的区别：derive 起新方案 / import 导入外部目录 / import upgrade 给已有方案出新版本
+
 ## 0.9.2
 
 - `scheme import upgrade=true`：用外部项目的做法给**已有方案**出新版本（旧版保留、批次不改绑）

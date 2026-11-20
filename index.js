@@ -252,7 +252,7 @@ export function apply(ctx, config = {}) {
       '制卡方案的读写。方案是数据不是代码：适用场景、所需输入、各阶段方法、输出字段规范、'
       + '质量规则、验收标准、已知局限。list 返回摘要，get 返回全文，save 永远写新版本（旧版本保留）。',
     parameters: {
-      action: { type: 'string', required: true, enum: ['list', 'get', 'save', 'import', 'test', 'delete'] },
+      action: { type: 'string', required: true, enum: ['list', 'get', 'save', 'import', 'test', 'delete', 'derive'] },
       confirm: { type: 'boolean', description: 'delete 时需要 confirm=true' },
       force: { type: 'boolean', description: 'delete 时允许删 active 方案（默认只允许 draft/deprecated）' },
       id: { type: 'string', description: '方案 id（get/save 必填）' },
@@ -273,6 +273,7 @@ export function apply(ctx, config = {}) {
       },
       path: { type: 'string', description: 'import 时：外来方案目录的绝对路径（内含 scheme.json）' },
       upgrade: { type: 'boolean', description: 'import 遇到同名方案时：给已有 id 出一个新版本，旧版本保留' },
+      sources: { type: 'array', items: { type: 'string' }, description: 'derive 时：外部文件路径（文本），拼成方案正文的起点' },
       changeWhy: { type: 'string', description: 'save 时说明这次改了什么、为什么' },
       includeDrafts: { type: 'boolean', description: 'list 时是否包含 draft 方案，默认 false' },
       query: { type: 'string', description: 'list 时按 id / 标题 / 正文关键词过滤' },
@@ -470,6 +471,35 @@ export function apply(ctx, config = {}) {
             files: remaining.length,
             versions: remaining.filter((name) => /^v\d+\.json$/.test(name)).length,
           },
+        }
+      }
+      if (args.action === 'derive') {
+        if (!args.id) throw new Error('derive 需要 id')
+        if (!args.sources?.length) throw new Error('derive 需要 sources（外部文件路径数组）')
+        const chunks = []
+        const used = []
+        for (const path of args.sources) {
+          if (!existsSync(path)) throw new Error(`找不到文件：${path}`)
+          const fileText = readFileSync(path, 'utf8')
+          used.push({ path, chars: fileText.length })
+          chunks.push(`## 来源：${basename(path)}\n\n${fileText.trim()}`)
+        }
+        const header = `# ${args.title ?? args.id}\n\n> 由外部文件汇总而来，待提炼成可执行方法；用 scheme save 出新版本时再补字段、判据与样卡。`
+        const body = `${header}\n\n${chunks.join('\n\n---\n\n')}\n`
+        const saved = await saveScheme(store.root, {
+          id: args.id,
+          title: args.title ?? args.id,
+          status: 'draft',
+          deliverable: 'method',
+          origin: { kind: 'derived', refs: used.map((entry) => entry.path) },
+          changeWhy: args.changeWhy ?? `根据外部文件整理：${used.map((entry) => basename(entry.path)).join('、')}`,
+        })
+        const dir = join(store.root, 'schemes', saved.id)
+        writeFileSync(join(dir, 'body.md'), body, 'utf8')
+        copyFileSync(join(dir, 'body.md'), join(dir, `body.v${saved.version}.md`))
+        return {
+          scheme: saved,
+          text: `已从 ${used.length} 个文件生成方案 ${saved.id}@${saved.version}（draft）；下一步 scheme save 补字段与判据`,
         }
       }
       if (args.action === 'import') {
