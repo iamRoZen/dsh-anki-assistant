@@ -5,7 +5,7 @@
  * 写进提示词。它不产出步骤序列——顺序由 Agent 决定。
  */
 
-import { copyFileSync, existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -13,11 +13,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
 import { createStore } from './lib/store.js'
-import { getScheme, saveScheme, seedSchemes, seedSchemesSync } from './lib/scheme.js'
 import { createAnki, AnkiError } from './lib/anki.js'
 import { batchFile } from './lib/batch.js'
 import { WriteError } from './lib/write.js'
-import { readPackageSchemeRecord, refreshSchemeAssets, seedLibrarySync, seedSchemeDirsSync } from './lib/library.js'
 import { runNodeScript, schemeFiles, text } from './lib/tools/shared.js'
 import { register as registerScheme } from './lib/tools/scheme.js'
 import { register as registerProject } from './lib/tools/project.js'
@@ -150,57 +148,8 @@ export function apply(ctx, config = {}) {
 
   let ready = null
   async function boot() {
-    if (!ready) {
-      ready = (async () => {
-        await store.init()
-        const seeds = JSON.parse(readFileSync(new URL('./assets/schemes/seed.json', import.meta.url), 'utf8'))
-        const added = await seedSchemes(store.root, seeds)
-        seedLibrarySync(store.root, ASSETS)
-        seedSchemeDirsSync(store.root, ASSETS)
-        // 目录式方案：首次登记 v1；随包 revision 更高时追加新版本。
-        // 不覆盖旧版本、不改绑已有批次（批次钉的是版本号）。
-        for (const entry of readdirSync(new URL('./assets/schemes/', import.meta.url), { withFileTypes: true })) {
-          if (!entry.isDirectory()) continue
-          // 读包内资产，不读数据目录里的旧副本——否则升级永远不会发生
-          const record = readPackageSchemeRecord(ASSETS, entry.name)
-          if (!record) continue
-          const stored = await getScheme(store.root, entry.name)
-          if (!stored) {
-            const saved = await saveScheme(store.root, { ...record, changeWhy: '归纳方案种子 v1' })
-            added.push(`${saved.id}@${saved.version}`)
-            continue
-          }
-          const storedRevision = Number(stored.revision ?? 0)
-          const assetRevision = Number(record.revision ?? 0)
-          if (assetRevision > storedRevision) {
-            const dir = join(store.root, 'schemes', entry.name)
-            const bodyFile = join(dir, 'body.md')
-            const oldSnapshot = join(dir, `body.v${stored.version}.md`)
-            // 先把旧正文按版本快照留住，再让包内新版覆盖 body.md
-            if (!existsSync(oldSnapshot) && existsSync(bodyFile)) copyFileSync(bodyFile, oldSnapshot)
-            refreshSchemeAssets(store.root, ASSETS, entry.name)
-            const saved = await saveScheme(store.root, {
-              ...record,
-              changeWhy: `随包判据升级：revision ${storedRevision} → ${assetRevision}；旧版本与旧正文保留，批次不自动改绑`,
-            })
-            if (existsSync(bodyFile)) copyFileSync(bodyFile, join(dir, `body.v${saved.version}.md`))
-            added.push(`${saved.id}@${saved.version}`)
-          }
-        }
-        return { added }
-      })()
-    }
+    if (!ready) ready = store.init()
     return ready
-  }
-
-  // 提示词第一次装配就要看到方案索引，所以播种先同步做一遍。
-  try {
-    const seeds = JSON.parse(readFileSync(new URL('./assets/schemes/seed.json', import.meta.url), 'utf8'))
-    seedSchemesSync(store.root, seeds)
-    seedLibrarySync(store.root, ASSETS)
-    seedSchemeDirsSync(store.root, ASSETS)
-  } catch (error) {
-    // 播种失败不阻塞加载；工具调用时 boot() 会再试一次并给出错误
   }
 
   const runtime = {

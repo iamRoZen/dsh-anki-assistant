@@ -7,7 +7,6 @@
  *
  * 依赖：Python 3.10+（或 ANKI_ASSISTANT_PYTHON）。
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
 import { rmSync } from 'node:fs'
 import { mkdtemp, readFile } from 'node:fs/promises'
 
@@ -30,7 +29,6 @@ const expectedChecks = schemeRecord.quality?.legacy?.checks ?? []
 
 const load = async (relative) => import(pathToFileURL(join(packageRoot, relative)).href)
 const { apply } = await load('index.js')
-const { saveScheme } = await load('lib/scheme.js')
 const { loadPlan } = await load('lib/write.js')
 
 function fakeContext() {
@@ -69,8 +67,8 @@ async function mount({ python } = {}) {
     ankiClient: fakeAnki(),
     ...(python ? { python } : {}),
   })
-  const saved = await saveScheme(dataDir, { ...schemeRecord, changeWhy: '入口测试' })
-  return { dataDir, tools, saved }
+  const imported = await tools.get('scheme').execute({ action: 'import', path: schemeDir, changeWhy: '入口测试' }, {})
+  return { dataDir, tools, saved: imported.scheme }
 }
 
 async function openBatch(tools, saved, dataDir) {
@@ -139,64 +137,6 @@ export async function runEntryTests({ python, brokenPython = 'definitely-not-pyt
       planRejected: /旧判据未执行|检测器缺失/.test(planErrorMessage),
       planMessage: planErrorMessage,
     },
-  }
-}
-
-/**
- * 升级回归：模拟“已装 v0.4.0”的数据目录（v1 无 legacy、无 revision），
- * 用新包启动后必须追加 v2，并保留 v1 记录、v1 正文与钉在 v1 的批次。
- */
-export async function runUpgradeTest() {
-  const { getScheme } = await load('lib/scheme.js')
-  const { loadBatch, createBatch, upsertItems, saveBatch } = await load('lib/batch.js')
-  const { readSchemeBody } = await load('lib/library.js')
-
-  const dataDir = trackDir(await mkdtemp(join(tmpdir(), 'anki-as-upgrade-')))
-  const oldRecord = JSON.parse(JSON.stringify(schemeRecord))
-  delete oldRecord.revision
-  oldRecord.status = 'active'
-  oldRecord.quality = { rules: [], rubric: '旧版：JS 规则，无 legacy' }
-
-  const old = await saveScheme(dataDir, { ...oldRecord, changeWhy: '模拟 v0.4.0 已装' })
-  const dir = join(dataDir, 'schemes', schemeRecord.id)
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'body.md'), '<!-- OLD JS BODY v1 -->\n', 'utf8')
-
-  const pinnedBatch = createBatch({
-    id: 'upgrade-pin',
-    scheme: { id: schemeRecord.id, version: old.version },
-    target: { deck: 'UpgradeDeck', model: schemeRecord.output.model },
-  })
-  pinnedBatch.fields = schemeRecord.output.fields.map((field) => field.name)
-  upsertItems(pinnedBatch, [{ id: 'pin-1', fields: failSample.fields }])
-  await saveBatch(dataDir, pinnedBatch)
-
-  // 用“新包”挂载：boot 时会读到包内资产的 revision，并追加新版本
-  const { ctx, tools } = fakeContext()
-  apply(ctx, { dataDir, ankiClient: fakeAnki() })
-  await tools.get('scheme').execute({ action: 'list', includeDrafts: true }, {})
-
-  const active = await getScheme(dataDir, schemeRecord.id)
-  const storedV1 = await getScheme(dataDir, schemeRecord.id, old.version)
-  const pinned = await loadBatch(dataDir, 'upgrade-pin')
-
-  return {
-    oldVersion: old.version,
-    active: {
-      version: active?.version ?? null,
-      revision: active?.revision ?? null,
-      hasLegacy: Boolean(active?.quality?.legacy),
-      checks: active?.quality?.legacy?.checks ?? [],
-    },
-    storedV1: {
-      version: storedV1?.version ?? null,
-      hasLegacy: Boolean(storedV1?.quality?.legacy),
-    },
-    bodies: {
-      v1: readSchemeBody(dataDir, schemeRecord.id, old.version) ?? '',
-      active: readSchemeBody(dataDir, schemeRecord.id, active?.version) ?? '',
-    },
-    batch: { id: pinned?.id ?? null, version: pinned?.scheme?.version ?? null },
   }
 }
 

@@ -10,9 +10,9 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { validate } from '../assets/schemes/medical-qac-2026/validate.mjs'
+import { validate } from '../examples/schemes/medical-qac-2026/validate.mjs'
 
-const SCHEME_DIR = fileURLToPath(new URL('../assets/schemes/medical-qac-2026/', import.meta.url))
+const SCHEME_DIR = fileURLToPath(new URL('../examples/schemes/medical-qac-2026/', import.meta.url))
 const RUNNER = join(SCHEME_DIR, 'test', 'run.mjs')
 const ENTRY = pathToFileURL(join(SCHEME_DIR, 'test', 'entry.mjs')).href
 
@@ -52,21 +52,6 @@ test('Python 不可用时两个入口都明确报错', async () => {
   const result = await runEntryTests()
   assert.equal(result.missingPython.validateRejected, true, result.missingPython.message)
   assert.equal(result.missingPython.planRejected, true, result.missingPython.planMessage)
-})
-
-test('已装 v0.4.0 的旧方案按 revision 追加新版本，旧记录/旧正文/批次不动', async () => {
-  const { runUpgradeTest } = await import(ENTRY)
-  const result = await runUpgradeTest()
-
-  assert.equal(result.storedV1.hasLegacy, false, 'v1 应保持旧记录，不能凭空长出 legacy')
-  assert.equal(result.active.hasLegacy, true, '新版本必须带 quality.legacy')
-  assert.equal(result.active.version > result.oldVersion, true, '应追加新版本而不是覆盖')
-  assert.equal(result.active.checks.includes('CLOZE'), true)
-
-  assert.match(result.bodies.v1, /OLD JS BODY v1/, '旧正文要留住，供旧版本回看')
-  assert.doesNotMatch(result.bodies.active, /OLD JS BODY v1/, '新版本读到的应是包内新正文')
-
-  assert.equal(result.batch.version, result.oldVersion, '已在跑的批次仍钉旧版本')
 })
 
 test('适配器缺失时抛错而不是通过', async () => {

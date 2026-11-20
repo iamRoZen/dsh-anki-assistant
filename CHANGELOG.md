@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0
+
+- **插件包不再携带方案**：`assets/` 只剩 `skills/`、`print/`；方案与模板移到 `examples/`，不打包
+- 删除启动播种、`revision` 刷新、示例实践/模板复制逻辑；新装方案库为空，用户按需 `scheme import`
+- `examples/README.md`：四个示例的预载命令
+- `npm run verify:package`：断言包里没有 pyc、dist、根 test、examples，且有 LICENSE/README
+- 包体积：41 个文件 / 压缩 74 kB（原 87 个 / 128.9 kB）
+
 ## 0.10.0
 
 - 结构重构：`index.js` 从 1542 行降到 262 行，只留装配

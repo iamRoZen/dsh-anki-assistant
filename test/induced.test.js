@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 方案自带判据的语义测试：直接调方案目录里的 validate.mjs（不进插件通用层）。
  */
 import test from 'node:test'
@@ -7,9 +7,9 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { adapterPath, validate } from '../assets/schemes/medical-qac-2026/validate.mjs'
+import { adapterPath, validate } from '../examples/schemes/medical-qac-2026/validate.mjs'
 
-const DIR = new URL('../assets/schemes/medical-qac-2026/', import.meta.url)
+const DIR = new URL('../examples/schemes/medical-qac-2026/', import.meta.url)
 const SCHEME_DIR = fileURLToPath(DIR)
 const scheme = JSON.parse(readFileSync(new URL('scheme.json', DIR), 'utf8'))
 const checks = scheme.quality.legacy.checks

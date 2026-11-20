@@ -17,7 +17,8 @@ dsh plugin install --profile desktop .     # 或在 GUI 插件管理里安装本
 ```
 
 - 链接安装：改源码后**重启 Desktop** 才加载新代码，不用重装。
-- 自检四步：`npm test` 应 104/104；新会话能选「Anki Assistant」；`scheme list` 看得到种子方案；`card_preview` 能出图。
+- 自检四步：`npm test` 应 110/110；新会话能选「Anki Assistant」；`scheme list` 能列出方案（数据目录为空属正常）；`card_preview` 能出图。
+- 示例不随包：需要时 `scheme import path=<repo>/examples/schemes/<id>`。
 - preset 不出现时依次查：profile `package.json` 里有没有 `link:`；`node_modules` 是不是 junction；`package.json` 是否带 UTF-8 BOM。
 
 ## 2. 开工检查

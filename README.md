@@ -22,44 +22,47 @@
 
 ```
 anki-assistant/
-  index.js               插件入口：6 个工具、提示词段、方案启动登记
+  index.js               装配：settings / store / anki / boot / 提示词
   cordis.patch.yml       Preset 声明：persona、通用工具、本项目插件
   lib/
+    tools/               7 个工具：scheme、project、practice、batch、materials、card_write、card_preview
     store.js             原子 JSON 存储，损坏文件隔离
-    scheme.js            方案外壳：校验、不可变版本、seed
-    library.js           资产播种：方案目录、模板、实践、print
+    scheme.js            方案外壳：校验、不可变版本
+    library.js           方案正文、模板、实践库的读写
     batch.js             批次状态机
-    rules.js             7 种机械规则（JS）
+    rules.js            机械规则（JS）
     validators.js        规则实现：字当量、序号、表格、挖空
     cloze.js             挖空截断检查：BRACE / TAIL / UNCLOSED
     write.js             计划、提交、回读
-    anki.js              AnkiConnect 薄客户端 + GUI 动作
+    anki.js              AnkiConnect 薄客户端 + GUI 动作 + 自动拉起
     materials.js         PDF 按页重建行，返回页与行号
     preview.js           卡面渲染：真实模板 / CSS / MathJax / PNG / PDF
-  assets/
-    schemes/
-      seed.json          两条种子方案记录
-      qac-memory.md      种子方案正文（教材驱动）
-      qac-exam.md        种子方案正文（题源驱动）
-      medical-qac-2026/  自包含方案：记录 + 正文 + 样卡 + 测试 + 自带判据（vendor/）
-      gaoshu-steps/      自包含方案：数学推导，纯 JS 校验器
-      index.json         短索引，给人看与检索
-    templates/qac-v4.md  可复用卡片模板
-    practices/           实践库正文
-    skills/              技能正文
-    print/               打印样式示例（answer-compact.css、qa-serif.css）
-  docs/ locale/ test/    说明、文案、测试
+    project.js           项目目录
+  assets/                随包：skills/、print/（技能与打印样式，不含方案）
+  examples/              仓库示例，不打包
+    schemes/             qac-memory、qac-exam、gaoshu-steps、medical-qac-2026（可直接 scheme import）
+    practices/           实践示例
+    templates/           卡片模板说明（qac-v4.md）
+  docs/ locale/ test/ scripts/
 ```
 
 ## 三层数据
 
 | 层 | 位置 | 说明 |
 |---|---|---|
-| 包内 | `assets/` | 随包分发；首次安装复制到数据目录 |
+| 包内 | `assets/` | 只放运行必需：技能与打印样式；**不含方案** |
+| 示例 | `examples/` | 仓库自带，用户 Agent 按需 `scheme import`，不随包 |
 | 数据 | `<dataDir>/schemes`、`batches`、`plans`、`audit`、`previews`、`practices`、`sources` | 用户资产与运行记录，**不打包** |
 | Anki | AnkiConnect | 最终卡片 |
 
-方案升级按 `revision`：包内更高时**追加新版本**，旧记录、旧正文保留，正在跑的批次不被改绑。
+新装时方案库是空的；示例在仓库 `examples/`，需要时显式导入：
+
+```bash
+scheme import path=<repo>/examples/schemes/qac-memory
+scheme import path=<repo>/examples/schemes/gaoshu-steps
+```
+
+方案保存即新版本；确认不再需要的旧版本用 `scheme prune` 清理。
 
 ## 工具
 
@@ -82,7 +85,7 @@ anki-assistant/
 - `samples/pass.json`、`samples/fail.json`：合格样卡与反例
 - `validate.mjs`：方案自带校验器，导出 `validate(fields, options) → { suite, ok, issues, source }`；缺模块或异常都明确报错，不退回 JS 兜底
 - `print.css`：该方案的打印样式，自动生效
-- `assets/schemes/<id>/vendor/`：方案私有的原码与依赖（如 `medical-qac-2026` 的 Python 判据）
+- 方案目录的 `vendor/`：方案私有的原码与依赖（如 `medical-qac-2026` 的 Python 判据）
 
 机械检查分两层：插件内置（字段、判重、挖空截断、方案规则）与方案自带（`validate.mjs`）。
 
@@ -137,8 +140,8 @@ anki-assistant/
 
 ```bash
 npm test                                   # 根测试：工具、方案、批次、写入、预览、方案入口
-node assets/schemes/medical-qac-2026/test/run.mjs   # 方案独立复验
-node assets/schemes/medical-qac-2026/test/entry.mjs # 两个入口的真实调用
+node examples/schemes/medical-qac-2026/test/run.mjs   # 方案独立复验
+node examples/schemes/medical-qac-2026/test/entry.mjs # 两个入口的真实调用
 
 npm run clean:temp                         # 列出本项目在 %TEMP% 留下的沙箱目录
 npm run clean:temp -- --apply --older-than=24       # 删除 24 小时前的
@@ -152,7 +155,8 @@ npm run clean:temp -- --apply --older-than=24       # 删除 24 小时前的
 index.js            装配：settings / store / anki / boot / skill / 提示词，只接线
 lib/tools/          7 个工具：scheme、project、practice、batch、materials、card_write、card_preview
 lib/                领域层：scheme、batch、write、preview、anki、materials、store、library、project
-assets/             种子：schemes/、skills/、print/、practices/
+assets/             随包：skills/、print/
+examples/           仓库示例，不打包：schemes/、practices/、templates/
 docs/               执行手册、方案格式、设计取舍、迁移
 scripts/            体检与清理脚本（不参与运行时）
 test/               根测试；方案自带测试在各自目录

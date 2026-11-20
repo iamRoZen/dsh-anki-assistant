@@ -1,4 +1,4 @@
-# Contributing
+﻿# Contributing
 
 ## 环境
 
@@ -16,7 +16,7 @@
 
 ```bash
 npm test                                   # 根测试
-node assets/schemes/medical-qac-2026/test/run.mjs   # 方案独立复验
+node examples/schemes/medical-qac-2026/test/run.mjs   # 方案独立复验
 ```
 
 改代码必须带测试；改方案必须带样卡（一张能过、一张该被拦）。

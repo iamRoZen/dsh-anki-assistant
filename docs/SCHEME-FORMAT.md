@@ -166,7 +166,7 @@ scheme derive id=gaoshu-from-articles title="从两篇文章来的数学卡方�
 
 把整个方案目录拷给别人即可（`scheme.json` + 正文 + 样卡 + 判据 + 样式）。
 
-- 想成为所有人的默认内容：放进 `assets/schemes/`，提交发版；
+- 仓库示例放 `examples/schemes/`，**不随包分发**；用户按需 `scheme import`；
 - 给某个人：让对方用 `scheme import path=<目录>` 导入，插件会：
   1. 读 `scheme.json`，把 id 规范成可当目录名的形式（小写、空格与标点变连字符，保留中英文）；
   2. 整个目录复制进 `<dataDir>/schemes/<id>/`；

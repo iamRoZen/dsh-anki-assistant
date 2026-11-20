@@ -5,7 +5,7 @@ import { tempDir } from './temp.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { listSchemes, getScheme, saveScheme, validateScheme, seedSchemes } from '../lib/scheme.js'
+import { listSchemes, getScheme, saveScheme, validateScheme } from '../lib/scheme.js'
 import { createStore } from '../lib/store.js'
 
 function baseScheme(overrides = {}) {
@@ -81,18 +81,6 @@ test('list 默认不返回 draft', async () => {
   assert.deepEqual(visible.map((entry) => entry.id), ['demo-scheme'])
   const all = await listSchemes(root, { includeDrafts: true })
   assert.equal(all.length, 2)
-})
-
-test('种子只补缺，不覆盖已有版本', async () => {
-  const root = await tempDir('anki-as-scheme-')
-  const store = createStore(root)
-  await store.init()
-  const seeds = [baseScheme({ id: 'seed-a' }), baseScheme({ id: 'seed-b' })]
-  const first = await seedSchemes(root, seeds)
-  assert.deepEqual(first, ['seed-a@1', 'seed-b@1'])
-
-  const second = await seedSchemes(root, seeds)
-  assert.deepEqual(second, [])
 })
 
 test('损坏的方案文件被隔离，不再阻塞其他方案', async () => {

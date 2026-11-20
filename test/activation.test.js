@@ -39,6 +39,26 @@ async function mount(config = {}) {
   return { ctx, tools, dataDir }
 }
 
+/** 测试用基础方案：包内不再播种，用例自己建。 */
+async function demo(tools, id = 'demo') {
+  await tools.get('scheme').execute({
+    action: 'save',
+    id,
+    scheme: {
+      id,
+      title: '演示方案',
+      status: 'active',
+      deliverable: 'cards',
+      output: {
+        model: 'M',
+        fields: [{ name: '问题', spec: '问句' }, { name: '答案', spec: '答案' }],
+      },
+    },
+    body: '# 演示\n\n什么时候用：测试。',
+    changeWhy: '测试基线',
+  }, {})
+}
+
 test('注册六个工具，名字稳定', async () => {
   const { tools } = await mount()
   assert.deepEqual([...tools.keys()].sort(), ['batch', 'card_preview', 'card_write', 'materials', 'practice', 'project', 'scheme'])
@@ -390,19 +410,20 @@ test('skill 提供正文：能力目录，而非固定流程', async () => {
   assert.doesNotMatch(skill.content, /25 字|25字/)
 })
 
-test('提示词段列出种子方案', async () => {
-  const { ctx } = await mount()
+test('提示词段列出方案索引', async () => {
+  const { ctx, tools } = await mount()
+  await demo(tools)
   const text = ctx.systemPrompt.section.text()
   assert.match(text, /现有方案/)
-  assert.match(text, /qac-memory/)
+  assert.match(text, /demo/)
 })
 
-test('scheme list 能读出随包种子', async () => {
+test('scheme list 读出数据目录里的方案', async () => {
   const { tools } = await mount()
+  await demo(tools, 'listed')
   const value = await tools.get('scheme').execute({ action: 'list' }, {})
-  assert.equal(value.schemes.length >= 2, true)
   const ids = value.schemes.map((scheme) => scheme.id)
-  assert.equal(ids.includes('qac-memory'), true)
+  assert.equal(ids.includes('listed'), true)
 })
 
 test('scheme save 需要 changeWhy，否则拒绝', async () => {
@@ -415,11 +436,12 @@ test('scheme save 需要 changeWhy，否则拒绝', async () => {
 
 test('同名再 open 视为改绑：换目标、保留题目', async () => {
   const { tools } = await mount()
+  await demo(tools)
   const batch = tools.get('batch')
   await batch.execute({
     action: 'open',
     batch: 'b1',
-    scheme: 'qac-memory',
+    scheme: 'demo',
     deck: '旧牌组',
     model: 'QAC 问答挖空 v4（国标引用）',
     items: [{ id: 'i1', fields: { 问题: '这是什么？', 答案: '{{c1::答案}}' } }],
@@ -427,7 +449,7 @@ test('同名再 open 视为改绑：换目标、保留题目', async () => {
   const again = await batch.execute({
     action: 'open',
     batch: 'b1',
-    scheme: 'qac-memory',
+    scheme: 'demo',
     deck: '新牌组',
     model: 'QAC 问答挖空 v4（国标引用）',
   }, {})
@@ -438,27 +460,51 @@ test('同名再 open 视为改绑：换目标、保留题目', async () => {
 
 test('scheme get 带回正文与实践反查', async () => {
   const { tools } = await mount()
-  const value = await tools.get('scheme').execute({ action: 'get', id: 'qac-memory' }, {})
+  await demo(tools)
+  await tools.get('practice').execute({
+    action: 'save',
+    id: 'p-demo',
+    body: '# 原始请求\n\np120:L6-9',
+    scheme: 'demo',
+    modules: ['制作卡片'],
+  }, {})
+  const value = await tools.get('scheme').execute({ action: 'get', id: 'demo' }, {})
   assert.match(value.scheme.body, /什么时候用/)
   assert.equal(Array.isArray(value.scheme.practices), true)
-  assert.equal(value.scheme.practices[0].id, '2026-11-18-药理学-哌唑嗪-三张卡')
+  assert.equal(value.scheme.practices[0].id, 'p-demo')
 })
 
 test('practice 列出并读出全文', async () => {
   const { tools } = await mount()
+  await demo(tools)
+  await tools.get('practice').execute({
+    action: 'save',
+    id: 'p-demo',
+    body: '# 原始请求\n\np120:L6-9',
+    scheme: 'demo',
+    modules: ['制作卡片'],
+  }, {})
   const list = await tools.get('practice').execute({ action: 'list' }, {})
   assert.equal(list.cases.length, 1)
-  assert.equal(list.cases[0].scheme.id, 'qac-memory')
-  const one = await tools.get('practice').execute({ action: 'get', id: '2026-11-18-药理学-哌唑嗪-三张卡' }, {})
+  assert.equal(list.cases[0].scheme.id, 'demo')
+  const one = await tools.get('practice').execute({ action: 'get', id: 'p-demo' }, {})
   assert.match(one.case.body, /原始请求/)
   assert.match(one.case.body, /p120:L6-9/)
 })
 
 test('practice 可按模块与方案过滤', async () => {
   const { tools } = await mount()
+  await demo(tools)
+  await tools.get('practice').execute({
+    action: 'save',
+    id: 'p-demo',
+    body: '# 记录',
+    scheme: 'demo',
+    modules: ['制作卡片'],
+  }, {})
   const byModule = await tools.get('practice').execute({ action: 'list', module: '制作卡片' }, {})
   assert.equal(byModule.cases.length, 1)
-  const none = await tools.get('practice').execute({ action: 'list', scheme: 'cloze-memory' }, {})
+  const none = await tools.get('practice').execute({ action: 'list', scheme: 'missing' }, {})
   assert.equal(none.cases.length, 0)
 })
 
