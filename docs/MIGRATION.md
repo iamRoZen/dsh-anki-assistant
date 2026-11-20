@@ -54,4 +54,6 @@ scheme import path="D:/旧项目/schemes/medical_qac" upgrade=true \
 2. 先跑一次体检，把有问题的方案列出来；
 3. 逐个 `scheme get` 看正文，按上表改；
 4. 每个方案 `scheme save` 新版本 + `scheme test`；
-5. 全部通过后再把状态转 `active`，观察一次真实任务。
+5. 全部通过后再把状态转 `active`，观察一次真实任务；
+6. 确认没有批次需要旧版本后，`scheme prune id=<id> confirm=true` 清掉半成品版本
+   （自动保留 active 与被批次钉住的版本）。

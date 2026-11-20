@@ -252,7 +252,7 @@ export function apply(ctx, config = {}) {
       '制卡方案的读写。方案是数据不是代码：适用场景、所需输入、各阶段方法、输出字段规范、'
       + '质量规则、验收标准、已知局限。list 返回摘要，get 返回全文，save 永远写新版本（旧版本保留）。',
     parameters: {
-      action: { type: 'string', required: true, enum: ['list', 'get', 'save', 'import', 'test', 'delete', 'derive'] },
+      action: { type: 'string', required: true, enum: ['list', 'get', 'save', 'import', 'test', 'delete', 'derive', 'prune'] },
       confirm: { type: 'boolean', description: 'delete 时需要 confirm=true' },
       force: { type: 'boolean', description: 'delete 时允许删 active 方案（默认只允许 draft/deprecated）' },
       id: { type: 'string', description: '方案 id（get/save 必填）' },
@@ -286,10 +286,14 @@ export function apply(ctx, config = {}) {
           schemes: { type: 'array', items: { type: 'object', additionalProperties: true, properties: {} } },
           scheme: { type: 'object', additionalProperties: true, properties: {} },
           test: { type: 'object', additionalProperties: true, properties: {} },
+          pruned: { type: 'object', additionalProperties: true, properties: {} },
           deleted: { type: 'object', additionalProperties: true, properties: {} },
         },
       },
       render(_args, value) {
+        if (value.pruned) {
+          return text(`保留 v${value.pruned.kept}，删除 ${value.pruned.deleted.length} 个旧版本${value.pruned.deleted.length ? `：v${value.pruned.deleted.join(', v')}` : ''}`)
+        }
         if (value.deleted) {
           return text(`已删除方案 ${value.deleted.id}（${value.deleted.files} 个文件，${value.deleted.versions} 个版本）`)
         }
@@ -473,8 +477,42 @@ export function apply(ctx, config = {}) {
           },
         }
       }
-      if (args.action === 'derive') {
-        if (!args.id) throw new Error('derive 需要 id')
+      if (args.action === 'prune') {
+        if (args.confirm !== true) throw new Error('prune 需要 confirm=true')
+        const scheme = await getScheme(store.root, args.id)
+        if (!scheme) throw new Error(`没有方案 ${args.id}`)
+        const dir = join(store.root, 'schemes', scheme.id)
+        const versions = readdirSync(dir)
+          .map((name) => /^v(\d+)\.json$/.exec(name))
+          .filter(Boolean)
+          .map((match) => Number(match[1]))
+          .sort((a, b) => a - b)
+        const keep = new Set([scheme.version])
+        try {
+          for (const file of readdirSync(join(store.root, 'batches'))) {
+            if (!file.endsWith('.json')) continue
+            try {
+              const batch = JSON.parse(readFileSync(join(store.root, 'batches', file), 'utf8'))
+              if (batch.scheme?.id === scheme.id) keep.add(Number(batch.scheme.version))
+            } catch {
+              // 坏批次文件忽略
+            }
+          }
+        } catch {
+          // 没有批次目录
+        }
+        const deleting = versions.filter((version) => !keep.has(version))
+        if (deleting.length === 0) {
+          return { pruned: { id: scheme.id, kept: [...keep].sort((a, b) => a - b), deleted: [] } }
+        }
+        for (const version of deleting) {
+          rmSync(join(dir, `v${version}.json`), { force: true })
+          rmSync(join(dir, `body.v${version}.md`), { force: true })
+        }
+        rmSync(join(dir, 'scheme.json'), { force: true })
+        return { pruned: { id: scheme.id, kept: [...keep].sort((a, b) => a - b), deleted: deleting } }
+      }
+      if (args.action === 'derive') {        if (!args.id) throw new Error('derive 需要 id')
         if (!args.sources?.length) throw new Error('derive 需要 sources（外部文件路径数组）')
         const chunks = []
         const used = []

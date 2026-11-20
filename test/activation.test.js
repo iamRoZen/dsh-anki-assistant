@@ -219,6 +219,45 @@ test('card_write delete 需要确认', async () => {
   )
 })
 
+test('scheme prune 只留 active 版本，需 confirm', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  const base = {
+    id: 'prune-test',
+    title: '修剪',
+    status: 'draft',
+    deliverable: 'cards',
+    output: { model: 'M', fields: [{ name: '问题', spec: '问句' }] },
+  }
+  for (const [version, body] of [[1, 'v1'], [2, 'v2'], [3, 'v3']]) {
+    await scheme.execute({ action: 'save', id: 'prune-test', scheme: base, body, changeWhy: `第 ${version} 版` }, {})
+  }
+  await assert.rejects(() => scheme.execute({ action: 'prune', id: 'prune-test' }, {}), /confirm=true/)
+  const result = await scheme.execute({ action: 'prune', id: 'prune-test', confirm: true }, {})
+  assert.deepEqual(result.pruned.deleted, [1, 2])
+  await assert.rejects(() => scheme.execute({ action: 'get', id: 'prune-test', version: 1 }, {}), /没有方案/)
+})
+
+test('scheme prune 保留 active 与被批次钉住的版本', async () => {
+  const { tools } = await mount()
+  const scheme = tools.get('scheme')
+  const base = {
+    id: 'pin-test',
+    title: '钉住',
+    status: 'draft',
+    deliverable: 'cards',
+    output: { model: 'M', fields: [{ name: '问题', spec: '问句' }] },
+  }
+  await scheme.execute({ action: 'save', id: 'pin-test', scheme: base, body: 'v1', changeWhy: '一' }, {})
+  await tools.get('batch').execute({ action: 'open', batch: 'bp', scheme: 'pin-test', schemeVersion: 1, deck: 'D', model: 'M' }, {})
+  await scheme.execute({ action: 'save', id: 'pin-test', scheme: base, body: 'v2', changeWhy: '二' }, {})
+  const result = await scheme.execute({ action: 'prune', id: 'pin-test', confirm: true }, {})
+  assert.deepEqual(result.pruned.kept, [1, 2])
+  assert.deepEqual(result.pruned.deleted, [])
+  const old = await scheme.execute({ action: 'get', id: 'pin-test', version: 1 }, {})
+  assert.equal(old.scheme.version, 1)
+})
+
 test('scheme derive 从外部文件起一个方案草稿', async () => {
   const { tools } = await mount()
   const dir = tempDirSync('anki-as-derive-')

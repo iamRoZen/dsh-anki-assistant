@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.4
+
+- `scheme prune`：清理旧版本，保留 active 与被批次钉住的版本；同时清掉重复的 `scheme.json`
+- 已对 `medical-qac-2026` 执行：保留 v2（批次钉住）与 v5（active），删除 v1/v3/v4
+- 还原被误改的仓库 assets 方案（测试恢复 111/111）
+
 ## 0.9.3
 
 - `scheme derive`：把外部文件（文本）拼成正文骨架，起一个 `method` 草稿方案；只汇总，不假装提炼
