@@ -1,182 +1,222 @@
 # Anki Assistant
 
-一个**可选的 Agent 环境**（Preset「Anki Assistant」）：用方案驱动做卡，工具只做确定性的事——
-存方案、排队、校验、写入、回读、渲染。判断（怎么取原文、怎么拆卡、怎么写记忆提示）由 Agent 与方案决定。
+一个**可选的 Agent 环境**（DeepSeek Harness Preset）：用「方案」驱动做 Anki 卡，把资料变成可检查、可续跑、可回查的卡片。
 
-## 名称
+它不替你做判断。工具只做确定性的事——存方案、排队、校验、写入、回读、渲染；怎么取原文、怎么拆卡、怎么写记忆提示，由 Agent 与方案决定。
 
-| 用途 | 值 |
+当前版本 `0.12.1`｜测试 124/124｜MIT
+
+## 这是什么，不是什么
+
+| 它是 | 它不是 |
 |---|---|
-| npm 包 / 仓库名 | `dsh-anki-assistant` |
-| Preset 显示名 | Anki Assistant |
-| 插件内部 id | `anki-assistant` |
-| 数据目录 | `~/.dsh/anki-assistant` |
+| DSH 的一个 Preset，只有选中它的会话才看得到这些工具 | Anki 插件，不装进 Anki |
+| 方案驱动的制卡工作台：方案、批次、计划、回读 | 通用 Anki 操作通道（那是 MCP 的事） |
+| 本地运行，数据在 `~/.dsh/anki-assistant` | 云端服务，不需要上传教材或卡片 |
+| 把「方法」存成可版本化、可测试的文件 | 提示词模板合集（那是 Skill 的事） |
 
-## 截图
+### 和 Anki MCP、Skill 的区别
 
-![结构与模拟工作流](screenshots/explainer.png)
+| | Anki MCP | Skill | 本项目 |
+|---|---|---|---|
+| 本质 | 通用 Anki 读写通道 | 给 Agent 看的方法说明 | 工具 + 状态 + 闸门 |
+| 状态 | 无 | 无 | 方案版本、批次台账、计划、回执、审计 |
+| 质量保证 | 靠调用方 | 靠模型自觉 | `validate` / `plan` / `commit` / `verify` / 渲染检查 |
+| 可复现 | 每次重新讲 | 每次重新读 | `scheme get` 恢复标准，批次断点续跑 |
+| 依赖 | 单独配置的 MCP server | 无 | 自带 AnkiConnect 客户端，不依赖 MCP 配置 |
 
-![真实卡面：正面问题与挖空、背面分条答案与引用](screenshots/cards.png)
+三者可以共存：Skill 提供方法，MCP 提供通用操作，本插件提供"按方案生产"的流水线与记录。只做一次性卡片时，MCP + Skill 就够了；要重复做、要一致、要能过两周接着做，才需要这一层。
 
-## 目录
+## 功能
+
+- **方案**：版本化（`v1.json`、`v2.json`…），正文、样卡、判据、依赖随版本归档；`prune` 清理旧版（保留被批次/项目引用的版本）。
+- **项目**：一次任务的现场（目标、资料、批次、决策记录、样卡），跑通后可 `to-scheme` 提炼成方案草稿。
+- **批次**：逐题状态机（`queued → ready → blocked/written`），断点续跑。
+- **写入闸门**：`plan` 只列可写题 → `commit` 幂等写入并落快照 → `verify` 回读；重试复用回执，不覆盖已有结果。
+- **资料定位**：PDF 按页重建行，返回 `p页:L行`，可直接写进定位字段。
+- **渲染验收**：按 Anki 模型真实模板 + CSS + MathJax 渲染 HTML/PNG/PDF，检测横向溢出；方案样卡可单独渲染。
+- **并发安全**：数据目录加锁，方案版本与批次提交串行化，避免并发覆盖与重复写卡。
+- **安全门**：外部/旧版方案脚本需在 `trustedSchemeVersions` 显式授权才会执行；预览 HTML 经过白名单过滤。
+- **依赖预检**：方案目录的 `requirements.txt` 在 `scheme test` 时检查，缺包明确报错，不自动安装。
+- **子 Agent**：大任务可按节拆分，一个批次一个 owner；主 Agent 预建牌组/模型并收口。
+
+## 项目结构
 
 ```
 anki-assistant/
-  index.js               装配：settings / store / anki / boot / 提示词
-  cordis.patch.yml       Preset 声明：persona、通用工具、本项目插件
+  index.js               装配：settings / store / anki / boot / 提示词段
+  cordis.patch.yml       Preset 声明：persona、通用工具、本插件
   lib/
     tools/               7 个工具：scheme、project、practice、batch、materials、card_write、card_preview
-    store.js             原子 JSON 存储，损坏文件隔离
-    scheme.js            方案外壳：校验、不可变版本
-    library.js           方案正文、模板、实践库的读写
+    store.js             原子 JSON 存储 + 数据锁，损坏文件隔离
+    scheme.js            方案：校验、版本、版本化附件、prune、信任门
     batch.js             批次状态机
-    rules.js            机械规则（JS）
-    validators.js        规则实现：字当量、序号、表格、挖空
-    cloze.js             挖空截断检查：BRACE / TAIL / UNCLOSED
-    write.js             计划、提交、回读
-    anki.js              AnkiConnect 薄客户端 + GUI 动作 + 自动拉起
-    materials.js         PDF 按页重建行，返回页与行号
-    preview.js           卡面渲染：真实模板 / CSS / MathJax / PNG / PDF
+    write.js             计划、提交、回执、回读（计划格式 v2）
+    anki.js              AnkiConnect 客户端 + 自动拉起 Anki
+    materials.js         PDF 按页重建行
+    preview.js           真实模板渲染 / PNG / PDF / 溢出检测
     project.js           项目目录
-  assets/                随包：skills/、print/（技能与打印样式，不含方案）
-  examples/              仓库示例，不打包
-    schemes/             qac-memory、qac-exam、gaoshu-steps、medical-qac-2026（可直接 scheme import）
-    practices/           实践示例
-    templates/           卡片模板说明（qac-v4.md）
-  docs/ locale/ test/ scripts/
+    library.js           方案正文、模板、实践库读写
+    paths.js             数据目录路径与链接防护
+    rules.js / validators.js / cloze.js   机械规则与挖空检查
+  assets/                随包：skills/（技能）、print/（打印样式）
+  examples/              仓库示例，不打包：schemes/、practices/、templates/
+  docs/                  执行手册、方案格式、设计取舍、迁移
+  scripts/               体检与清理（audit-schemes、check-workspace、verify-package）
+  test/                  根测试；方案自带测试在各自目录
 ```
 
-## 三层数据
+## 安装包结构
 
-| 层 | 位置 | 说明 |
-|---|---|---|
-| 包内 | `assets/` | 只放运行必需：技能与打印样式；**不含方案** |
-| 示例 | `examples/` | 仓库自带，用户 Agent 按需 `scheme import`，不随包 |
-| 数据 | `<dataDir>/schemes`、`batches`、`plans`、`audit`、`previews`、`practices`、`sources` | 用户资产与运行记录，**不打包** |
-| Anki | AnkiConnect | 最终卡片 |
+`npm pack` 产物（当前 42 个文件，压缩约 82 kB）：
 
-新装时方案库是空的；示例在仓库 `examples/`，需要时显式导入：
+```
+index.js  lib/  assets/  docs/  scripts/  locale/  icon.svg  cordis.patch.yml
+README.md  LICENSE  CHANGELOG.md  CONTRIBUTING.md  package.json
+```
+
+**不包含**：`test/`、`examples/`、`dist/`、`screenshots/`、`__pycache__`。`npm run verify:package` 会检查这些边界。
+
+## 安装
+
+要求：Node `>=22.19`，DSH `>=0.2.2-rc.3 <0.3.0`。
+
+```bash
+npm install --omit=dev
+dsh plugin install --profile desktop .     # 或在 GUI 插件管理里安装本目录
+```
+
+- 链接安装：改源码后**重启 Desktop** 生效，不用重装；
+- 安装后在**新会话**里选 Preset「Anki Assistant」；
+- 自检：`npm test` 应 124/124；`scheme list` 能列出方案（空数据目录属正常）；`card_preview` 能出图。
+
+### 配置
+
+写在 profile 的 preset 配置里（`preset-anki-assistant` 下 `anki-assistant` 那一行的 `config`），或用 GUI 的插件设置：
+
+```yaml
+dataDir: "C:/Users/you/.dsh/anki-assistant"
+ankiUrl: "http://127.0.0.1:8765"
+ankiExe: "C:/Program Files/Anki/anki.exe"   # 可选；不填则探测常见位置
+autoLaunchAnki: true                        # Anki 没开时自动拉起
+python: "python -X utf8"                    # 方案脚本用到 Python 时
+trustedSchemeVersions:                      # 外部/旧版方案脚本的显式授权
+  - medical-qac-2026@5
+```
+
+改完重启 Desktop。
+
+### 预载示例（可选）
+
+包内不带方案。示例在仓库 `examples/`，需要时导入：
 
 ```bash
 scheme import path=<repo>/examples/schemes/qac-memory
 scheme import path=<repo>/examples/schemes/gaoshu-steps
 ```
 
-方案保存即新版本；确认不再需要的旧版本用 `scheme prune` 清理。
+## 使用
+
+### 从零写一个方案
+
+```
+scheme save id=my-cards status=draft deliverable=method body=…
+# 做几张真卡，把认可的样卡与判据放进方案目录
+scheme test id=my-cards
+# 通过后转 cards + active
+```
+
+### 批量做卡
+
+```
+scheme get id=<方案>
+batch open batch=<批次> scheme=<id>@<version> deck=<牌组> model=<模型>
+batch put batch=<批次> items=[{ id, fields }]
+batch validate batch=<批次>
+card_write plan batch=<批次> mode=add
+card_write commit plan=<计划>
+card_write verify plan=<计划>
+card_preview batch=<批次> png=true measure=true
+```
+
+`present` 把渲染结果交给用户；没有渲染图不算交付。
+
+### 预览与打印
+
+- `card_preview`：整批长图、逐张 PNG、A4 PDF；`measure` 报横向溢出；
+- `card_preview scheme=<id> sample=pass`：按方案模型的真实模板渲染样卡，落到 `samples/render/`；
+- 预览只接受白名单 HTML 与 `data:` 图片（安全取舍）。
+
+### 升级注意
+
+- 0.12 起计划格式为 v2：**旧计划需要重新 `plan`**；已有提交回执仍可 `verify`；
+- 旧方案/外部方案的脚本默认不执行，需在 `trustedSchemeVersions` 加 `id@version`；
+- 方案附件按版本归档（`versions/<n>/`），旧版本不会读到新判据。
 
 ## 工具
 
-| 工具 | 作用 |
+| 工具 | 动作 |
 |---|---|
-| `project` | 项目：`open` / `list` / `get` / `update` / `close` / `to-scheme` / `delete`（一次任务的现场，跑通后提炼方案） |
-| `scheme` | 方案库：`list` / `get` / `save`（永远写新版本） / `derive`（从外部文件起新方案草稿） / `import`（导入外部目录；同名加 `upgrade=true` 出外部来源的新版本） / `test` / `prune`（清理旧版本，保留当前版本及批次、项目钉住的版本） / `delete`（需确认，有批次或项目引用时拒绝） |
-| `practice` | 实践库：`list` / `get` / `save`（记录一次真实运行） / `delete`（需确认） |
-| `batch` | 批次：`open` / `put` / `validate` / `fix`（修复挖空截断） / `next` / `mark` / `status` |
-| `materials` | 读资料并给行号：PDF 按页重建行，可按关键词只取命中行 |
-| `card_write` | 写入闸门：`plan`（add/update） / `commit`（幂等，可 `open=true` 在 Anki 打开） / `verify`（按快照回读） / `delete`（需确认，删除前后各读一次） |
-| `card_preview` | 渲染预览：`png`、`split`（逐张）、`pdf`（A4）、`measure`（溢出检测） |
+| `scheme` | `list` / `get` / `save` / `derive` / `import` / `test` / `prune` / `delete` |
+| `project` | `open` / `list` / `get` / `update` / `close` / `to-scheme` / `delete` |
+| `practice` | `list` / `get` / `save` / `delete` |
+| `batch` | `open` / `put` / `validate` / `fix` / `next` / `mark` / `status` |
+| `materials` | 按 `path` 读、按 `keyword` 只返回命中行 |
+| `card_write` | `plan` / `commit` / `verify` / `delete` |
+| `card_preview` | 渲染 HTML / PNG / 逐张 / PDF，`measure` 检测溢出 |
 
-## 方案接口
+## 数据
 
-方案是数据记录 + 方案目录里的文件，不是插件代码。完整目录约定与写作顺序见 [docs/SCHEME-FORMAT.md](docs/SCHEME-FORMAT.md)；拿到项目就要干活的话，先读 [docs/AGENT-BRIEF.md](docs/AGENT-BRIEF.md)。
+```
+~/.dsh/anki-assistant/
+  schemes/<id>/        v1.json、active.json、body.md、versions/<n>/
+  batches/             批次台账
+  plans/               计划（<plan>.json）与提交回执（<plan>.commit.json）
+  audit/anki.jsonl     Anki 写入审计
+  previews/            预览产物
+  practices/           运行记录
+  projects/<id>/       项目现场
+```
 
-- `scheme.json` 记录 `id`、`status`、`deliverable`、模型、字段和判据。登记时由插件分配 `version`。
-- `body.md`、样卡、样式及校验器随版本保存。`scheme get` 返回该版本的正文和附件目录 `assetDir`。
-- `samples/pass.json`、`samples/fail.json`：合格样卡与反例
-- `validate.mjs`：方案自带校验器，导出 `validate(fields, options) → { suite, ok, issues, source }`；缺模块或异常都明确报错，不退回 JS 兜底
-- `print.css`：该方案的打印样式，自动生效
-- 方案目录的 `vendor/`：方案私有的原码与依赖（如 `medical-qac-2026` 的 Python 判据）
-
-机械检查包括插件内置规则与方案自带的校验器。外部导入和旧版方案的脚本由用户配置 `trustedSchemeVersions` 后启用，按 `id@version` 授权。
-
-## 质量闸门
-
-1. `batch validate` 与 `card_write plan` 都会跑：方案规则 + 内置 cloze 检查 + 方案校验器；
-2. 命中问题写进该题的 `issues`，状态标 `blocked`，`commit` 不会写；
-3. 校验器缺失或异常 → 报「旧判据未执行」，不通过；
-4. 出处核验需要 refdb，未配置时明确标「出处未核」，不当作失败，也不当作通过；
-5. 计划绑定草稿、条目状态、方案版本和目标。可用 `card_preview plan=…` 核对当时计划里的可写条目。
-6. `commit` 保留每个条目的回执。连接中断后重试同一个计划，插件会核对已有结果并继续待确认的部分。
-
-## 渲染与打印
-
-`card_preview` 用模型的真实 Front/Back 模板与 CSS 渲染，支持 MathJax：
-
-- `png=true`：整批一张长图，高度随卡数增长；
-- `split=true`：每张单独 PNG，便于 `read_image` 逐张看；
-- `pdf=true`：A4 打印版，`pdfStyle` 选 `qa` / `question` / `answer`；
-- `pdfCss`：自定义 CSS，文件路径或 `assets/print` 下的文件名；方案目录的 `print.css` 自动生效；
-- `measure`：量横向溢出，回报「#3 div越界」这类文本，供 Agent 自动修正。
+方案只写数据目录，不写插件安装目录；`scheme delete` / `prune` 都会保留被批次或项目引用的版本。
 
 ## 依赖
 
-| 依赖 | 需要 | 缺失时 |
-|---|---|---|
-| Anki + AnkiConnect | 写入、按笔记预览、读取真实模型 | 方案与批次仍可用。方案和批次预览可退回字段渲染 |
-| `pdfjs-dist`（可选） | 读 PDF | `.txt` / `.md` 仍可读 |
-| Python 3.10+ | 仅声明旧判据的方案（如 `medical-qac-2026`） | 报「旧判据未执行」，不降级 |
-| Microsoft Edge | PNG / PDF | 只出 HTML |
+| 依赖 | 说明 |
+|---|---|
+| Node `>=22.19` | 运行时 |
+| DSH `>=0.2.2-rc.3 <0.3.0` | Host |
+| `parse5` | 预览 HTML 白名单过滤 |
+| `proper-lockfile` | 数据目录锁 |
+| `pdfjs-dist`（可选） | 读取 PDF 时用 |
+| Anki + AnkiConnect | 写入与渲染真实模型时 |
+| Python（可选） | 方案自带校验器；缺包由 `requirements.txt` 预检 |
+| Edge（可选） | PNG/PDF 渲染；没有 Edge 只出 HTML |
 
-## 配置与安装
+安装需要能访问 npm registry；离线环境请先准备缓存或换 vendored 依赖。
 
-```yaml
-- id: anki-assistant
-  name: dsh-anki-assistant
-  config:
-    dataDir: "C:/Users/you/.dsh/anki-assistant"
-    ankiUrl: "http://127.0.0.1:8765"
-    ankiExe: "C:/Program Files/Anki/anki.exe"   # 可选；不填则探测常见安装位置
-    autoLaunchAnki: true                        # Anki 没开时自动拉起，默认开
-    python: "python -X utf8"        # 仅带旧判据的方案用到
-    trustedSchemeVersions: []       # 只填已审阅的版本，例如 "gaoshu-steps@1"
-```
+## 开源协议
 
-这段写在 profile 的 preset 配置里（`preset-anki-assistant` 下 `anki-assistant` 那一行的 `config`），或用 GUI 的插件设置改；不配就用默认值。改完重启 Desktop。
+MIT，见 [LICENSE](LICENSE)。
 
-外部方案的脚本可在本机执行。用户审阅附件后，把具体版本加入 `trustedSchemeVersions` 并重启。升级成新版本后，按新版本单独授权。
+## 发布状态
 
-安装后在**新会话**里选 Preset「Anki Assistant」；工具、技能与提示词都挂在 preset 下，其他会话不受影响。
+- 测试 124/124；`npm run verify:package` 通过；
+- 真机 `plan → commit → retry → verify` 已通过（临时牌组，跑完清理）；
+- 本机 Edge 实测生成 PNG / PDF 并返回溢出检测；
+- 发布前还需：去掉 `package.json` 的 `"private": true`（仅当发 npm）、确认包名、把 GitHub 仓库设为 public。
 
-打包：`npm pack` 生成 tarball（含 `lib/`、`assets/`、`docs/`、`scripts/`、`LICENSE`，不含 `test/`、`dist/`、`__pycache__`）。要发布到 npm 需先去掉 `package.json` 里的 `"private": true`。
-
-运行时依赖两个包：`parse5`（预览 HTML 过滤）与 `proper-lockfile`（数据锁）。安装时需要能访问 npm registry；
-离线环境请先准备 npm 缓存，或把依赖换成本地 vendored 版本后再装。DSH 用 pnpm 安装时若拿不到 registry，会报拉取依赖失败。
-
-## 测试
-
-```bash
-npm test                                   # 根测试：工具、方案、批次、写入、预览、方案入口
-node examples/schemes/medical-qac-2026/test/run.mjs   # 方案独立复验
-node examples/schemes/medical-qac-2026/test/entry.mjs # 两个入口的真实调用
-
-npm run clean:temp                         # 列出本项目在 %TEMP% 留下的沙箱目录
-npm run clean:temp -- --apply --older-than=24       # 删除 24 小时前的
-```
-
-测试与模拟脚本会在退出时清掉自建的临时目录；历史残留用 `clean:temp` 处理，只匹配 `anki-*`、`HeadlessEdge*`、`sim-*`。
-
-## 代码结构
-
-```
-index.js            装配：settings / store / anki / boot / skill / 提示词，只接线
-lib/tools/          7 个工具：scheme、project、practice、batch、materials、card_write、card_preview
-lib/                领域层：scheme、batch、write、preview、anki、materials、store、library、project
-assets/             随包：skills/、print/
-examples/           仓库示例，不打包：schemes/、practices/、templates/
-docs/               执行手册、方案格式、设计取舍、迁移
-scripts/            体检与清理脚本（不参与运行时）
-test/               根测试；方案自带测试在各自目录
-```
-
-## 相关工作
+## 文档
 
 - [执行 Agent 手册](docs/AGENT-BRIEF.md)：开工检查、工具契约、批次状态机、失败手册、并发约定
-- [方案格式](docs/SCHEME-FORMAT.md)：目录结构、七条不变量、写作顺序、分享方式
+- [方案格式](docs/SCHEME-FORMAT.md)：目录结构、不变量、写作顺序、分享方式、依赖声明
 - [设计取舍](docs/DETAIL.md)：为什么这样分层、为什么判据归方案
-- [贡献指南](CONTRIBUTING.md)｜[变更记录](CHANGELOG.md)
+- [迁移指南](docs/MIGRATION.md)：旧方案升级、信任授权、计划重做
+- [示例方案](examples/README.md)｜[贡献指南](CONTRIBUTING.md)｜[变更记录](CHANGELOG.md)
 
 ## 边界
 
-- 不实现语义判据（「答案是否忠于原文」由人或方案负责）；
-- 不把用户数据打进 npm 包；
-- 预览保留常用卡面格式，并限制脚本、外部媒体和本地文件访问。启用 MathJax 时从 CDN 加载排版资源。
+- 语义判据（"答案是否忠于原文"）不由插件实现，只能由人或方案负责；
+- 不自动安装 Python 包，不替用户改环境；
+- 不保证没有 Anki 时的写入，只保证失败明确；
+- 预览不是像素级 Anki 渲染，模板 JS 与媒体不执行。
