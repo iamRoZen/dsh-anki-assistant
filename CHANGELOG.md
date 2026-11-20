@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.5
+
+- Anki 没开时自动拉起：`ankiExe` 可配置，未配置则探测常见安装位置；最多等 20 秒，失败才报错
+- 新增 `resolveAnkiExe` 与对应测试
+
+## 0.8.4
+
+- 子 Agent 改为直接执行，按批次分权（一个批次一个 owner）
+
 ## 0.8.1
 
 - 公开前收尾：示例实践脱敏、GitHub Actions（npm ci + npm test）、README 名称表

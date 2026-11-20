@@ -121,6 +121,8 @@ anki-assistant/
   config:
     dataDir: "C:/Users/you/.dsh/anki-assistant"
     ankiUrl: "http://127.0.0.1:8765"
+    ankiExe: "C:/Program Files/Anki/anki.exe"   # 可选；不填则探测常见安装位置
+    autoLaunchAnki: true                        # Anki 没开时自动拉起，默认开
     python: "python -X utf8"        # 仅带旧判据的方案用到
 ```
 

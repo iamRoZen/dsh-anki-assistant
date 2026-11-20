@@ -96,7 +96,7 @@ blocked  failed/parked
 
 | 现象 | 处理 |
 |---|---|
-| 连不上 Anki | 让用户启动 Anki / 装 AnkiConnect；只读功能仍可用 |
+| 连不上 Anki | 插件会先尝试自动拉起（`ankiExe` 或常见安装路径，最多等 20 秒）；仍连不上再让用户手动启动 / 装 AnkiConnect；只读功能仍可用 |
 | Python 缺失（`旧判据未执行`） | 该方案的 Python 判据跑不了，明确报告，不降级为 JS 通过 |
 | 没有 Edge | `card_preview` 只出 HTML，不出 PNG/PDF |
 | 模型字段对不上 | `plan` 会报缺哪个字段，先建模型或换模型 |

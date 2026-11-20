@@ -146,6 +146,8 @@ export function apply(ctx, config = {}) {
     python: typeof config.python === 'string' && config.python
       ? config.python
       : (process.platform === 'win32' ? 'python -X utf8' : 'python3'),
+    ankiExe: typeof config.ankiExe === 'string' && config.ankiExe ? config.ankiExe : null,
+    autoLaunchAnki: config.autoLaunchAnki !== false,
   }
 
   /**
@@ -184,6 +186,8 @@ export function apply(ctx, config = {}) {
     : createAnki({
       url: settings.ankiUrl,
       auditFile: join(settings.dataDir, 'audit', 'anki.jsonl'),
+      ankiExe: settings.ankiExe,
+      autoLaunch: settings.autoLaunchAnki,
     })
 
   let ready = null
